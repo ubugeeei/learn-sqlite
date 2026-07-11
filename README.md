@@ -9,10 +9,12 @@ database from first principles.
 
 ```sh
 scala-cli test .
-scala-cli run . -- repl ./example.db
+scala-cli run . -- repl
 ```
 
-The evolving implementation guide starts at [`docs/README.md`](docs/README.md).
+The current REPL exercises the in-memory relational milestone. Durable B-tree
+storage is available as a lower-level API and will be joined to the catalog in
+the next milestone. The evolving guide starts at [`docs/README.md`](docs/README.md).
 
 ## Compatibility
 
@@ -20,4 +22,3 @@ The SQL surface deliberately starts small and grows chapter by chapter. The
 implementation is inspired by SQLite's documented file format and language,
 but files produced by this project are not yet SQLite-compatible. See
 [`docs/compatibility.md`](docs/compatibility.md) for the exact support matrix.
-
