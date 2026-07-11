@@ -1,6 +1,6 @@
 //> using scala "3.7.1"
 //> using options "-deprecation" "-feature" "-unchecked" "-Wunused:all" "-Wvalue-discard" "-Wnonunit-statement"
-//> using test.dep "org.scalameta::munit::1.1.1"
+//> using test.dep "org.scalameta::munit::1.3.4"
 
 /** Build definition for the learning SQLite implementation.
   *
