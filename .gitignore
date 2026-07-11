@@ -1,0 +1,10 @@
+.bsp/
+.scala-build/
+.metals/
+target/
+.idea/
+.vscode/
+*.db
+*.db-journal
+.DS_Store
+
