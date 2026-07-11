@@ -8,4 +8,3 @@
   * every test under `test` is compiled by `scala-cli test .`.
   */
 object Project
-

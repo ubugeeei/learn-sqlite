@@ -21,7 +21,10 @@ class TableBTreeSuite extends munit.FunSuite:
     reopenedPager.close()
 
   test("reject duplicate keys without changing data"):
-    val pager = Pager.open(Files.createTempDirectory("duplicate").resolve("tree.db"), 512).toOption.get
+    val pager = Pager
+      .open(Files.createTempDirectory("duplicate").resolve("tree.db"), 512)
+      .toOption
+      .get
     val tree = TableBTree.open(pager).toOption.get
     assert(tree.insert(1, Array[Byte](1)).isRight)
     assert(tree.insert(1, Array[Byte](2)).isLeft)
@@ -29,11 +32,17 @@ class TableBTreeSuite extends munit.FunSuite:
     pager.close()
 
   test("defensively copy values at the storage boundary"):
-    val pager = Pager.open(Files.createTempDirectory("copy").resolve("tree.db"), 512).toOption.get
+    val pager = Pager
+      .open(Files.createTempDirectory("copy").resolve("tree.db"), 512)
+      .toOption
+      .get
     val tree = TableBTree.open(pager).toOption.get
     val input = Array[Byte](1, 2, 3)
     assert(tree.insert(1, input).isRight)
     input(0) = 9
     val output = tree.get(1).toOption.flatten.get; output(1) = 9
-    assertEquals(tree.get(1).toOption.flatten.get.toVector, Vector[Byte](1, 2, 3))
+    assertEquals(
+      tree.get(1).toOption.flatten.get.toVector,
+      Vector[Byte](1, 2, 3)
+    )
     pager.close()

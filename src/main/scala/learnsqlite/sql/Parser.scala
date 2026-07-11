@@ -1,16 +1,23 @@
 package learnsqlite.sql
 
 final case class ParseError(message: String, position: SourcePosition):
-  override def toString: String = s"$message at ${position.line}:${position.column}"
+  override def toString: String =
+    s"$message at ${position.line}:${position.column}"
 
 /** Recursive-descent parser for the documented SQL subset. */
 object Parser:
   def parse(sql: String): Either[ParseError, Statement] =
-    Lexer.tokenize(sql).left.map(error => ParseError(error.message, error.position)).flatMap: tokens =>
-      val parser = Implementation(tokens)
-      parser.statement().flatMap: value =>
-        val _ = parser.accept(TokenKind.Semicolon)
-        parser.expect(TokenKind.End, "end of input").map(_ => value)
+    Lexer
+      .tokenize(sql)
+      .left
+      .map(error => ParseError(error.message, error.position))
+      .flatMap: tokens =>
+        val parser = Implementation(tokens)
+        parser
+          .statement()
+          .flatMap: value =>
+            val _ = parser.accept(TokenKind.Semicolon)
+            parser.expect(TokenKind.End, "end of input").map(_ => value)
 
   private final class Implementation(tokens: Vector[Token]):
     private var index = 0
@@ -35,7 +42,8 @@ object Parser:
     private def columnDefinition(): Either[ParseError, ColumnDefinition] = for
       name <- identifier()
       declaredType = current.kind match
-        case TokenKind.Word(value) if !Set("PRIMARY", "NOT", "NULL").contains(upper(value)) =>
+        case TokenKind.Word(value)
+            if !Set("PRIMARY", "NOT", "NULL").contains(upper(value)) =>
           index += 1; Some(value)
         case _ => None
       primary = optionalKeywords("PRIMARY", "KEY")
@@ -47,17 +55,20 @@ object Parser:
       table <- identifier()
       columns <-
         if accept(TokenKind.LeftParen) then
-          commaSeparated(identifier()).flatMap(values => expect(TokenKind.RightParen, "')'").map(_ => values))
+          commaSeparated(identifier()).flatMap(values =>
+            expect(TokenKind.RightParen, "')'").map(_ => values)
+          )
         else Right(Vector.empty)
       _ <- requireKeyword("VALUES")
       rows <- commaSeparated(parenthesizedExpressions())
     yield Statement.Insert(table, columns, rows)
 
-    private def parenthesizedExpressions(): Either[ParseError, Vector[Expr]] = for
-      _ <- expect(TokenKind.LeftParen, "'('")
-      values <- commaSeparated(expression())
-      _ <- expect(TokenKind.RightParen, "')'")
-    yield values
+    private def parenthesizedExpressions(): Either[ParseError, Vector[Expr]] =
+      for
+        _ <- expect(TokenKind.LeftParen, "'('")
+        values <- commaSeparated(expression())
+        _ <- expect(TokenKind.RightParen, "')'")
+      yield values
 
     private def select(): Either[ParseError, Statement] = for
       projection <- commaSeparated(selectItem())
@@ -68,9 +79,11 @@ object Parser:
 
     private def selectItem(): Either[ParseError, SelectItem] =
       if accept(TokenKind.Star) then Right(SelectItem.All)
-      else expression().flatMap: expr =>
-        val alias = if keyword("AS") then identifier().map(Some(_)) else Right(None)
-        alias.map(SelectItem.Expression(expr, _))
+      else
+        expression().flatMap: expr =>
+          val alias =
+            if keyword("AS") then identifier().map(Some(_)) else Right(None)
+          alias.map(SelectItem.Expression(expr, _))
 
     private def delete(): Either[ParseError, Statement] = for
       _ <- requireKeyword("FROM")
@@ -82,8 +95,10 @@ object Parser:
       if keyword("WHERE") then expression().map(Some(_)) else Right(None)
 
     private def expression(): Either[ParseError, Expr] = or()
-    private def or(): Either[ParseError, Expr] = chain(and(), Set("OR"), _ => BinaryOperator.Or)
-    private def and(): Either[ParseError, Expr] = chain(comparison(), Set("AND"), _ => BinaryOperator.And)
+    private def or(): Either[ParseError, Expr] =
+      chain(and(), Set("OR"), _ => BinaryOperator.Or)
+    private def and(): Either[ParseError, Expr] =
+      chain(comparison(), Set("AND"), _ => BinaryOperator.And)
 
     private def comparison(): Either[ParseError, Expr] =
       additive().flatMap: left =>
@@ -96,37 +111,50 @@ object Parser:
           case TokenKind.GreaterOrEqual => Some(BinaryOperator.GreaterOrEqual)
           case _                        => None
         operator match
-          case None => Right(left)
+          case None     => Right(left)
           case Some(op) => index += 1; additive().map(Expr.Binary(left, op, _))
 
     private def additive(): Either[ParseError, Expr] =
       binaryLoop(
         multiplicative(),
-        Map(TokenKind.Plus -> BinaryOperator.Add, TokenKind.Minus -> BinaryOperator.Subtract),
+        Map(
+          TokenKind.Plus -> BinaryOperator.Add,
+          TokenKind.Minus -> BinaryOperator.Subtract
+        ),
         () => multiplicative()
       )
 
     private def multiplicative(): Either[ParseError, Expr] =
       binaryLoop(
         unary(),
-        Map(TokenKind.Star -> BinaryOperator.Multiply, TokenKind.Slash -> BinaryOperator.Divide),
+        Map(
+          TokenKind.Star -> BinaryOperator.Multiply,
+          TokenKind.Slash -> BinaryOperator.Divide
+        ),
         () => unary()
       )
 
     private def unary(): Either[ParseError, Expr] =
-      if accept(TokenKind.Minus) then unary().map(Expr.Unary(UnaryOperator.Negate, _))
+      if accept(TokenKind.Minus) then
+        unary().map(Expr.Unary(UnaryOperator.Negate, _))
       else if keyword("NOT") then unary().map(Expr.Unary(UnaryOperator.Not, _))
       else primary()
 
     private def primary(): Either[ParseError, Expr] = current.kind match
-      case TokenKind.Integer(value) => index += 1; Right(Expr.Value(Literal.Integer(value)))
-      case TokenKind.Real(value)    => index += 1; Right(Expr.Value(Literal.Real(value)))
-      case TokenKind.Text(value)    => index += 1; Right(Expr.Value(Literal.Text(value)))
-      case TokenKind.Word(value) if upper(value) == "NULL" => index += 1; Right(Expr.Value(Literal.Null))
-      case TokenKind.Word(_) => identifier().map(Expr.Column(_))
+      case TokenKind.Integer(value) =>
+        index += 1; Right(Expr.Value(Literal.Integer(value)))
+      case TokenKind.Real(value) =>
+        index += 1; Right(Expr.Value(Literal.Real(value)))
+      case TokenKind.Text(value) =>
+        index += 1; Right(Expr.Value(Literal.Text(value)))
+      case TokenKind.Word(value) if upper(value) == "NULL" =>
+        index += 1; Right(Expr.Value(Literal.Null))
+      case TokenKind.Word(_)   => identifier().map(Expr.Column(_))
       case TokenKind.LeftParen =>
         index += 1
-        expression().flatMap(value => expect(TokenKind.RightParen, "')'").map(_ => value))
+        expression().flatMap(value =>
+          expect(TokenKind.RightParen, "')'").map(_ => value)
+        )
       case _ => fail("expected expression")
 
     private def binaryLoop(
@@ -153,10 +181,14 @@ object Parser:
       do
         val word = current.kind.asInstanceOf[TokenKind.Word].value
         index += 1
-        result = result.flatMap(left => comparison().map(Expr.Binary(left, operator(word), _)))
+        result = result.flatMap(left =>
+          comparison().map(Expr.Binary(left, operator(word), _))
+        )
       result
 
-    private def commaSeparated[A](first: => Either[ParseError, A]): Either[ParseError, Vector[A]] =
+    private def commaSeparated[A](
+        first: => Either[ParseError, A]
+    ): Either[ParseError, Vector[A]] =
       first.flatMap: head =>
         val values = Vector.newBuilder[A]; values += head
         var failure: Option[ParseError] = None
@@ -166,9 +198,10 @@ object Parser:
             case Left(error)  => failure = Some(error)
         failure.toLeft(values.result())
 
-    private def identifier(): Either[ParseError, Identifier] = current.kind match
-      case TokenKind.Word(value) => index += 1; Right(Identifier(value))
-      case _                     => fail("expected identifier")
+    private def identifier(): Either[ParseError, Identifier] =
+      current.kind match
+        case TokenKind.Word(value) => index += 1; Right(Identifier(value))
+        case _                     => fail("expected identifier")
 
     private def requireKeyword(value: String): Either[ParseError, Unit] =
       if keyword(value) then Right(()) else fail(s"expected $value")
@@ -193,5 +226,7 @@ object Parser:
     def expect(kind: TokenKind, description: String): Either[ParseError, Unit] =
       if accept(kind) then Right(()) else fail(s"expected $description")
 
-    private def fail[A](message: String): Left[ParseError, A] = Left(ParseError(message, current.position))
+    private def fail[A](message: String): Left[ParseError, A] = Left(
+      ParseError(message, current.position)
+    )
     private def upper(value: String) = value.toUpperCase(java.util.Locale.ROOT)

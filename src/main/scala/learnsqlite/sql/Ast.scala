@@ -11,8 +11,8 @@ final case class Identifier(value: String):
 
 /** Literal values accepted by the SQL parser.
   *
-  * The runtime representation is separate; this AST records source intent.
-  * See [[https://www.sqlite.org/lang_expr.html literal-value]].
+  * The runtime representation is separate; this AST records source intent. See
+  * [[https://www.sqlite.org/lang_expr.html literal-value]].
   */
 enum Literal:
   case Null
@@ -35,7 +35,8 @@ enum BinaryOperator:
   case Add, Subtract, Multiply, Divide
 
 /** A declared column. SQLite type names determine affinity rather than a fixed
-  * type; see [[https://www.sqlite.org/datatype3.html#determination_of_column_affinity]].
+  * type; see
+  * [[https://www.sqlite.org/datatype3.html#determination_of_column_affinity]].
   */
 final case class ColumnDefinition(
     name: Identifier,
@@ -73,4 +74,3 @@ enum Statement:
       where: Option[Expr]
   )
   case Delete(table: Identifier, where: Option[Expr])
-

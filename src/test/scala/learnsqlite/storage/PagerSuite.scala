@@ -19,7 +19,9 @@ class PagerSuite extends munit.FunSuite:
   test("reject invalid headers instead of opening SQLite files"):
     val path = Files.createTempFile("foreign", ".db")
     Files.writeString(path, "SQLite format 3 plus bytes")
-    assert(Pager.open(path, 512).left.toOption.get.message.contains("not an LSQL"))
+    assert(
+      Pager.open(path, 512).left.toOption.get.message.contains("not an LSQL")
+    )
 
   test("reject partial and incorrectly sized writes"):
     val path = Files.createTempDirectory("pager-errors").resolve("data.db")

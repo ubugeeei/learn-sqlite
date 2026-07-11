@@ -42,7 +42,7 @@ object Lexer:
             case Left(error)  => failure = Some(error)
       failure match
         case Some(error) => Left(error)
-        case None        => Right(result.result() :+ Token(TokenKind.End, position))
+        case None => Right(result.result() :+ Token(TokenKind.End, position))
 
     private def skipTrivia(): Unit =
       var continuing = true
@@ -52,8 +52,10 @@ object Lexer:
           while offset < input.length && current != '\n' do advance()
         else if current == '/' && peek(1).contains('*') then
           advance(); advance()
-          while offset < input.length && !(current == '*' && peek(1).contains('/')) do
-            advance()
+          while offset < input.length && !(current == '*' && peek(1).contains(
+              '/'
+            ))
+          do advance()
           if offset < input.length then
             advance(); advance()
         else continuing = false
@@ -62,30 +64,37 @@ object Lexer:
       val start = position
       current match
         case c if c.isLetter || c == '_' =>
-          Right(Token(TokenKind.Word(takeWhile(ch => ch.isLetterOrDigit || ch == '_')), start))
-        case c if c.isDigit => number(start)
-        case '\''           => string(start)
-        case '"'            => quotedIdentifier(start)
-        case '('             => one(TokenKind.LeftParen, start)
-        case ')'             => one(TokenKind.RightParen, start)
-        case ','             => one(TokenKind.Comma, start)
-        case ';'             => one(TokenKind.Semicolon, start)
-        case '*'             => one(TokenKind.Star, start)
-        case '+'             => one(TokenKind.Plus, start)
-        case '-'             => one(TokenKind.Minus, start)
-        case '/'             => one(TokenKind.Slash, start)
-        case '='             => one(TokenKind.Equal, start)
+          Right(
+            Token(
+              TokenKind.Word(takeWhile(ch => ch.isLetterOrDigit || ch == '_')),
+              start
+            )
+          )
+        case c if c.isDigit               => number(start)
+        case '\''                         => string(start)
+        case '"'                          => quotedIdentifier(start)
+        case '('                          => one(TokenKind.LeftParen, start)
+        case ')'                          => one(TokenKind.RightParen, start)
+        case ','                          => one(TokenKind.Comma, start)
+        case ';'                          => one(TokenKind.Semicolon, start)
+        case '*'                          => one(TokenKind.Star, start)
+        case '+'                          => one(TokenKind.Plus, start)
+        case '-'                          => one(TokenKind.Minus, start)
+        case '/'                          => one(TokenKind.Slash, start)
+        case '='                          => one(TokenKind.Equal, start)
         case '!' if peek(1).contains('=') => two(TokenKind.NotEqual, start)
         case '<' if peek(1).contains('=') => two(TokenKind.LessOrEqual, start)
         case '<' if peek(1).contains('>') => two(TokenKind.NotEqual, start)
-        case '<'             => one(TokenKind.Less, start)
-        case '>' if peek(1).contains('=') => two(TokenKind.GreaterOrEqual, start)
-        case '>'             => one(TokenKind.Greater, start)
-        case other           => Left(LexError(s"unexpected character '$other'", start))
+        case '<'                          => one(TokenKind.Less, start)
+        case '>' if peek(1).contains('=') =>
+          two(TokenKind.GreaterOrEqual, start)
+        case '>'   => one(TokenKind.Greater, start)
+        case other => Left(LexError(s"unexpected character '$other'", start))
 
     private def number(start: SourcePosition): Either[LexError, Token] =
       val whole = takeWhile(_.isDigit)
-      if offset < input.length && current == '.' && peek(1).exists(_.isDigit) then
+      if offset < input.length && current == '.' && peek(1).exists(_.isDigit)
+      then
         advance()
         val fraction = takeWhile(_.isDigit)
         Right(Token(TokenKind.Real(s"$whole.$fraction".toDouble), start))
@@ -110,7 +119,9 @@ object Lexer:
       if closed then Right(Token(TokenKind.Text(value.result()), start))
       else Left(LexError("unterminated string literal", start))
 
-    private def quotedIdentifier(start: SourcePosition): Either[LexError, Token] =
+    private def quotedIdentifier(
+        start: SourcePosition
+    ): Either[LexError, Token] =
       advance()
       val value = StringBuilder()
       var closed = false
@@ -138,7 +149,8 @@ object Lexer:
       advance(); advance(); Right(Token(kind, start))
 
     private def current: Char = input.charAt(offset)
-    private def peek(distance: Int): Option[Char] = input.lift(offset + distance)
+    private def peek(distance: Int): Option[Char] =
+      input.lift(offset + distance)
     private def position = SourcePosition(offset, line, column)
     private def advance(): Unit =
       if current == '\n' then
