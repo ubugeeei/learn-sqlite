@@ -12,7 +12,7 @@ model, and points to colocated production code and executable tests.
 4. [Pages and durable storage](03-pager.md)
 5. [B-trees](04-btree.md)
 6. [Transactions and recovery](05-transactions.md)
+7. [Putting the pieces together](06-putting-it-together.md)
 
 The chapters are intended to be followed in order. Every code sample is either
 copied from the implementation or small enough to paste into a Scala REPL.
-
