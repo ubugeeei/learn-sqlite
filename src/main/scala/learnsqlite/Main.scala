@@ -1,17 +1,25 @@
 package learnsqlite
 
 import learnsqlite.engine.{Database, Result}
+import learnsqlite.storage.FileBackend
+
+import java.nio.file.Path
 
 /** Minimal interactive shell for exploring the SQL engine. */
 @main def learnSqlite(arguments: String*): Unit =
-  if arguments.headOption.contains("repl") then repl()
-  else Console.err.println("usage: scala-cli run . -- repl")
+  arguments.toList match
+    case "repl" :: path :: Nil =>
+      FileBackend.open(Path.of(path)) match
+        case Left(error) => Console.err.println(s"cannot open database: $error")
+        case Right(backend) =>
+          val database = Database(backend)
+          try repl(database, s"file $path")
+          finally database.close()
+    case "memory" :: Nil => repl(Database(), "memory")
+    case _ => Console.err.println("usage: scala-cli run . -- repl <database-file> | memory")
 
-private def repl(): Unit =
-  val database = Database()
-  println(
-    "learn-sqlite 0.1 (in-memory SQL milestone); end statements with ';', .quit to exit"
-  )
+private def repl(database: Database, description: String): Unit =
+  println(s"learn-sqlite 0.2 ($description); enter one statement per line, .quit to exit")
   var running = true
   while running do
     val line = scala.io.StdIn.readLine("lsql> ")
@@ -22,8 +30,8 @@ private def repl(): Unit =
         case Right(result) => printResult(result)
 
 private def printResult(result: Result): Unit = result match
-  case Result.Created(table)       => println(s"created $table")
-  case Result.Modified(rows)       => println(s"$rows row(s) modified")
+  case Result.Created(table) => println(s"created $table")
+  case Result.Modified(rows) => println(s"$rows row(s) modified")
   case Result.Query(columns, rows) =>
     println(columns.mkString("|"))
     rows.foreach(row => println(row.map(_.render).mkString("|")))

@@ -9,12 +9,12 @@ database from first principles.
 
 ```sh
 scala-cli test .
-scala-cli run . -- repl
+scala-cli run . -- repl ./example.db
 ```
 
-The current REPL exercises the in-memory relational milestone. Durable B-tree
-storage is available as a lower-level API and will be joined to the catalog in
-the next milestone. The evolving guide starts at [`docs/README.md`](docs/README.md).
+The REPL persists schemas and rows through the catalog, SQLite record codec,
+table B+trees, and pager. Use `scala-cli run . -- memory` for a disposable
+session. The evolving guide starts at [`docs/README.md`](docs/README.md).
 
 ## Compatibility
 
