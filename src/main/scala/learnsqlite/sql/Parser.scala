@@ -28,7 +28,8 @@ object Parser:
       else if keyword("INSERT") then insert()
       else if keyword("SELECT") then select()
       else if keyword("DELETE") then delete()
-      else fail("expected CREATE, INSERT, SELECT, or DELETE")
+      else if keyword("UPDATE") then update()
+      else fail("expected CREATE, INSERT, SELECT, DELETE, or UPDATE")
 
     private def createTable(): Either[ParseError, Statement] =
       for
@@ -95,6 +96,21 @@ object Parser:
         table <- identifier()
         predicate <- optionalWhere()
       yield Statement.Delete(table, predicate)
+
+    private def update(): Either[ParseError, Statement] =
+      for
+        table <- identifier()
+        _ <- requireKeyword("SET")
+        assignments <- commaSeparated(assignment())
+        predicate <- optionalWhere()
+      yield Statement.Update(table, assignments, predicate)
+
+    private def assignment(): Either[ParseError, (Identifier, Expr)] =
+      for
+        column <- identifier()
+        _ <- expect(TokenKind.Equal, "'='")
+        value <- expression()
+      yield column -> value
 
     private def optionalWhere(): Either[ParseError, Option[Expr]] =
       if keyword("WHERE") then expression().map(Some(_)) else Right(None)

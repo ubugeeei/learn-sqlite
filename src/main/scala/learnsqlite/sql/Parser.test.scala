@@ -67,6 +67,16 @@ class ParserSuite extends munit.FunSuite:
       Parser.parse("DELETE FROM users WHERE id >= 10 AND name != 'root'")
     assert(delete.toOption.get.asInstanceOf[Statement.Delete].where.nonEmpty)
 
+  test("parse UPDATE assignments and predicate"):
+    val update = Parser
+      .parse("UPDATE accounts SET balance = balance + 10, name = 'updated' WHERE id = 1")
+      .toOption
+      .get
+      .asInstanceOf[Statement.Update]
+    assertEquals(update.table, Identifier("accounts"))
+    assertEquals(update.assignments.map(_._1), Vector(Identifier("balance"), Identifier("name")))
+    assert(update.where.nonEmpty)
+
   private val invalidStatements = Vector(
     ("unterminated text", "SELECT 'oops FROM t", "unterminated", SourcePosition(7, 1, 8)),
     ("trailing token", "SELECT * FROM t nonsense", "end of input", SourcePosition(16, 1, 17)),

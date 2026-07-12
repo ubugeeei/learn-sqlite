@@ -59,6 +59,7 @@ enum SelectItem:
  *   - [[https://www.sqlite.org/lang_insert.html INSERT]]
  *   - [[https://www.sqlite.org/lang_select.html SELECT]]
  *   - [[https://www.sqlite.org/lang_delete.html DELETE]]
+ *   - [[https://www.sqlite.org/lang_update.html UPDATE]]
  */
 enum Statement:
   case CreateTable(
@@ -77,3 +78,8 @@ enum Statement:
     where: Option[Expr]
   )
   case Delete(table: Identifier, where: Option[Expr])
+  case Update(
+    table: Identifier,
+    assignments: Vector[(Identifier, Expr)],
+    where: Option[Expr]
+  )
