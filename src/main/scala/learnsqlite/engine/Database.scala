@@ -41,6 +41,7 @@ final class Database(private val backend: Backend = MemoryBackend())
       case value: Statement.Insert      => insert(value)
       case value: Statement.Select      => select(value)
       case value: Statement.Delete      => delete(value)
+      case value: Statement.Update      => update(value)
 
   /** Forces preceding writes through the backend durability boundary. */
   def flush(): Either[DatabaseError, Unit] =
@@ -147,13 +148,42 @@ final class Database(private val backend: Backend = MemoryBackend())
             matches(statement.where, target.schema, row).map(row -> _)
           ).left
             .map(ExecutionFailure.apply)
-            .flatMap: decisions =>
+            .flatMap { decisions =>
               val deleted = decisions.count(_._2)
               target
                 .replace(decisions.collect { case (row, false) => row })
                 .left
                 .map(ExecutionFailure.apply)
                 .map(_ => Result.Modified(deleted))
+            }
+
+  private def update(statement: Statement.Update) =
+    table(statement.table).flatMap: target =>
+      val resolved = traverse(statement.assignments): (name, expression) =>
+        target.schema
+          .resolve(name)
+          .toRight(s"no such column: ${name.value}")
+          .flatMap(column => validate(expression, target.schema).map(_ => column -> expression))
+      val duplicate =
+        statement.assignments.map(_._1.normalized).groupBy(identity).exists(_._2.size > 1)
+      if duplicate then failure("a column may only be assigned once")
+      else
+        resolved.left.map(ExecutionFailure.apply).flatMap: assignments =>
+          target.rows.left.map(ExecutionFailure.apply).flatMap: rows =>
+            traverse(rows): row =>
+              matches(statement.where, target.schema, row).flatMap:
+                case false => Right(row -> false)
+                case true =>
+                  traverse(assignments): (column, expression) =>
+                    Evaluator(expression, target.schema, row).map(column -> _)
+                  .flatMap: values =>
+                    val updated = row.values.toArray
+                    values.foreach((column, value) => updated(column.index) = value)
+                    Row.checked(target.schema, updated.toVector).map(_ -> true)
+            .left.map(ExecutionFailure.apply).flatMap: updates =>
+              val changed = updates.count(_._2)
+              target.replace(updates.map(_._1)).left
+                .map(ExecutionFailure.apply).map(_ => Result.Modified(changed))
 
   private def matches(
     predicate: Option[Expr],

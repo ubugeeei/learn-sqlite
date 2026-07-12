@@ -102,3 +102,47 @@ class DatabaseSuite extends munit.FunSuite:
         .message
         .contains("no such column")
     )
+
+  test("UPDATE evaluates assignments against the original row"):
+    val database = Database()
+    assert(database.execute("CREATE TABLE pairs (left_value INTEGER, right_value INTEGER)").isRight)
+    assert(database.execute("INSERT INTO pairs VALUES (1, 2), (3, 4)").isRight)
+    assertEquals(
+      database.execute(
+        "UPDATE pairs SET left_value = right_value, right_value = left_value WHERE left_value = 1"
+      ),
+      Right(Result.Modified(1))
+    )
+    assertEquals(
+      database.execute("SELECT * FROM pairs"),
+      Right(
+        Result.Query(
+          Vector("left_value", "right_value"),
+          Vector(
+            Vector(Value.Integer(2), Value.Integer(1)),
+            Vector(Value.Integer(3), Value.Integer(4))
+          )
+        )
+      )
+    )
+
+  private val invalidUpdates = Vector(
+    "unknown target column" -> "UPDATE users SET missing = 1",
+    "duplicate target column" -> "UPDATE users SET id = 1, id = 2",
+    "unknown expression column" -> "UPDATE users SET id = missing",
+    "NOT NULL violation" -> "UPDATE users SET id = NULL"
+  )
+
+  invalidUpdates.foreach: (scenario, sql) =>
+    test(s"UPDATE is all-or-nothing for $scenario"):
+      val database = Database()
+      assert(database.execute("CREATE TABLE users (id INTEGER NOT NULL)").isRight)
+      assert(database.execute("INSERT INTO users VALUES (1), (2)").isRight)
+      assert(database.execute(sql).isLeft)
+      assertEquals(
+        database.execute("SELECT * FROM users"),
+        Right(Result.Query(
+          Vector("id"),
+          Vector(Vector(Value.Integer(1)), Vector(Value.Integer(2)))
+        ))
+      )

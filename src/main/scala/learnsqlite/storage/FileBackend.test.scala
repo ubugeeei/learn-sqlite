@@ -74,6 +74,33 @@ class FileBackendSuite extends munit.FunSuite:
         Right(Result.Query(Vector("id"), Vector.empty))
       )
 
+  test("UPDATE survives reopen and failed UPDATE preserves every row"):
+    val path = temporaryDatabase("durable-update")
+    withDatabase(path): database =>
+      assert(database.execute(
+        "CREATE TABLE inventory (id INTEGER NOT NULL, quantity INTEGER NOT NULL)"
+      ).isRight)
+      assert(database.execute("INSERT INTO inventory VALUES (1, 10), (2, 20)").isRight)
+      assertEquals(
+        database.execute("UPDATE inventory SET quantity = quantity + 5 WHERE id = 2"),
+        Right(Result.Modified(1))
+      )
+      assert(database.execute("UPDATE inventory SET quantity = NULL").isLeft)
+
+    withDatabase(path): database =>
+      assertEquals(
+        database.execute("SELECT * FROM inventory"),
+        Right(
+          Result.Query(
+            Vector("id", "quantity"),
+            Vector(
+              Vector(Value.Integer(1), Value.Integer(10)),
+              Vector(Value.Integer(2), Value.Integer(25))
+            )
+          )
+        )
+      )
+
   private def temporaryDatabase(prefix: String): Path =
     Files.createTempDirectory(prefix).resolve("app.db")
 
