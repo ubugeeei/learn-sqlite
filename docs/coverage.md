@@ -81,7 +81,8 @@ Reference: [Database File Format](https://www.sqlite.org/fileformat.html)
 | Database header | `Pager.scala` | private LSQL format | 🟡 |
 | B-tree page header/cells | `TableBTree.scala` | private format | 🟡 |
 | Page-1 100-byte header | — | none | ⬜ |
-| Payload fractions/overflow | — | none | ⬜ |
+| Large payload overflow chains | `OverflowPages.scala`, SQL reopen tests | private format | ✅ |
+| SQLite payload fraction formulas | fixed 64-byte local prefix | none | ⬜ |
 | Freelist trunk/leaves | — | none | ⬜ |
 | Pointer-map pages/autovacuum | — | none | ⬜ |
 

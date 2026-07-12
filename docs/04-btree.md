@@ -256,16 +256,9 @@ and non-increasing keys.
 
 ## Payloads larger than a page
 
-A single payload that cannot fit in an empty leaf requires overflow pages. Those are not implemented
-yet. The tree rejects such a payload **before allocating or modifying any page**:
-
-```scala
-if LeafHeaderBytes + cellHeaderBytes + payload.length > pageSize then
-  Left(StorageError("... overflow pages are not implemented"))
-```
-
-Failing before mutation is essential. Attempting a split cannot help when one cell alone is too
-large.
+A single payload that cannot fit in a leaf uses a local prefix plus overflow-page chain. Chapter
+[13. Storing Large Records with Overflow Pages](13-overflow-pages.md) implements allocation,
+reconstruction, corruption checks, rollback, and large SQL TEXT integration.
 
 ## Declarative deep-tree tests
 
@@ -296,7 +289,6 @@ scala-cli test . --test-only learnsqlite.storage.TableBTreeSuite
 
 The tree now has logarithmic lookup and recursive split propagation. It still lacks:
 
-- overflow payload pages;
 - cell-level deletion and merge/rebalance;
 - a freelist to reuse unreachable pages;
 - index B-trees with composite encoded keys;

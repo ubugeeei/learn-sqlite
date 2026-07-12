@@ -80,7 +80,8 @@ Goal: keep lookup logarithmic as the file grows.
 - Interior table pages, recursive descent, and split propagation.
 - Stable-root growth without changing the catalog page id.
 - Multi-level reopen tests under adversarial insertion orders.
-- Remaining: overflow chains, deletion rebalancing, and freelist reuse.
+- Overflow chains with corruption detection and rollback-safe allocation.
+- Remaining: deletion rebalancing and freelist reuse.
 
 ## M7: rollback transactions — implemented foundation
 
