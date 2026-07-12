@@ -29,12 +29,38 @@ final class Pager private (
 ) extends AutoCloseable:
   import Pager.HeaderSize
   private var transactionJournal: Option[RollbackJournal] = None
+  private val freePages = scala.collection.mutable.TreeSet.empty[Int]
+  private var freePagesLoaded = false
 
   def pageCount: Int = ((channel.size() - HeaderSize) / pageSize).toInt
 
+  /** Counts pages currently marked reusable. */
+  def freePageCount: Either[StorageError, Int] = loadFreePages().map(_ => freePages.size)
+
   def allocate(): Either[StorageError, PageId] =
-    val id = PageId(pageCount)
-    write(id, Array.fill(pageSize)(0.toByte)).map(_ => id)
+    loadFreePages().flatMap: _ =>
+      freePages.headOption match
+        case Some(index) =>
+          val id = PageId(index)
+          write(id, Array.fill(pageSize)(0.toByte)).map: _ =>
+            freePages -= index
+            id
+        case None =>
+          val id = PageId(pageCount)
+          write(id, Array.fill(pageSize)(0.toByte)).map(_ => id)
+
+  /** Marks a page reusable through an ordinary journaled page write. */
+  def release(id: PageId): Either[StorageError, Unit] =
+    if id.value >= pageCount then Left(StorageError(s"page ${id.value} is out of bounds"))
+    else
+      read(id).flatMap: bytes =>
+        if bytes.headOption.contains(Pager.FreePageKind) then
+          Left(StorageError(s"page ${id.value} is already free"))
+        else
+          val marker = Array.fill(pageSize)(0.toByte)
+          marker(0) = Pager.FreePageKind
+          write(id, marker).flatMap: _ =>
+            loadFreePages().map(_ => freePages += id.value).map(_ => ())
 
   def read(id: PageId): Either[StorageError, Array[Byte]] =
     if id.value >= pageCount then
@@ -108,8 +134,21 @@ final class Pager private (
       case error: java.io.IOException =>
         Left(StorageError(s"page write failed: ${error.getMessage}"))
 
+  private def loadFreePages(): Either[StorageError, Unit] =
+    if freePagesLoaded then Right(())
+    else
+      freePages.clear()
+      (0 until pageCount).foldLeft(Right(()): Either[StorageError, Unit]):
+        case (result, index) =>
+          result.flatMap: _ =>
+            read(PageId(index)).map: bytes =>
+              if bytes.headOption.contains(Pager.FreePageKind) then freePages += index
+      .map: _ =>
+        freePagesLoaded = true
+
   private def rollback(journal: RollbackJournal): Either[StorageError, Unit] =
     transactionJournal = None
+    freePagesLoaded = false
     val restored = journal.beforeImages.foldLeft(Right(()): Either[StorageError, Unit]):
       case (result, (id, bytes)) => result.flatMap(_ => rawWrite(id, bytes))
     restored.flatMap: _ =>
@@ -125,6 +164,7 @@ object Pager:
   private val Magic =
     "LSQLDB01".getBytes(java.nio.charset.StandardCharsets.US_ASCII)
   private val HeaderSize = 16
+  private val FreePageKind: Byte = 126
   val DefaultPageSize = 4096
 
   def open(
