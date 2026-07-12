@@ -28,10 +28,13 @@ final class FileBackend private (pager: Pager, catalog: Catalog)
           case Some(_) => Left(s"table already exists: ${name.value}")
           case None    => Right(())
       _ <- Schema.from(columns)
-      allocated <- TableBTree.create(pager).left.map(_.message)
-      (root, _) = allocated
-      _ <- catalog.add(CatalogEntry(name, columns, root)).left.map(_.message)
-      _ <- flush()
+      _ <- pager.transaction:
+        for
+          allocated <- TableBTree.create(pager)
+          (root, _) = allocated
+          _ <- catalog.add(CatalogEntry(name, columns, root))
+        yield ()
+      .left.map(_.message)
     yield ()
 
   def table(name: Identifier): Either[String, StoredTable] =
@@ -69,19 +72,14 @@ final class FileBackend private (pager: Pager, catalog: Catalog)
               .flatMap(values => Row.checked(schema, values))
 
     def append(rows: Vector[Row]): Either[String, Unit] =
-      tree.scan.left
-        .map(_.message)
-        .flatMap: existing =>
+      val encoded = traverse(rows)(row => RecordCodec.encode(row.values).left.map(_.message))
+      encoded.flatMap: records =>
+        tree.scan.left.map(_.message).flatMap: existing =>
           val firstKey = existing.lastOption.fold(1L)(_._1 + 1)
-          traverseUnit(rows.zipWithIndex): (row, index) =>
-            RecordCodec
-              .encode(row.values)
-              .left
-              .map(_.message)
-              .flatMap(bytes =>
-                tree.insert(firstKey + index, bytes).left.map(_.message)
-              )
-          .flatMap(_ => flush())
+          pager.transaction:
+            traverseStorage(records.zipWithIndex): (bytes, index) =>
+              tree.insert(firstKey + index, bytes)
+          .left.map(_.message)
 
     def replace(rows: Vector[Row]): Either[String, Unit] =
       traverse(rows.zipWithIndex): (row, index) =>
@@ -90,8 +88,7 @@ final class FileBackend private (pager: Pager, catalog: Catalog)
           .left
           .map(_.message)
           .map(bytes => (index.toLong + 1) -> bytes)
-      .flatMap(entries => tree.replace(entries).left.map(_.message))
-        .flatMap(_ => flush())
+      .flatMap(entries => pager.transaction(tree.replace(entries)).left.map(_.message))
 
   private def traverse[A, B](values: Vector[A])(
     f: A => Either[String, B]
@@ -99,10 +96,10 @@ final class FileBackend private (pager: Pager, catalog: Catalog)
     values.foldLeft(Right(Vector.empty): Either[String, Vector[B]]):
       case (result, value) => result.flatMap(acc => f(value).map(acc :+ _))
 
-  private def traverseUnit[A](
+  private def traverseStorage[A](
     values: Vector[A]
-  )(f: A => Either[String, Unit]): Either[String, Unit] =
-    values.foldLeft(Right(()): Either[String, Unit])((result, value) =>
+  )(f: A => Either[StorageError, Unit]): Either[StorageError, Unit] =
+    values.foldLeft(Right(()): Either[StorageError, Unit])((result, value) =>
       result.flatMap(_ => f(value))
     )
 
