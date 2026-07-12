@@ -170,3 +170,42 @@ class DatabaseSuite extends munit.FunSuite:
         )
       )
     )
+
+  private val primaryKeyViolations = Vector(
+    "NULL key" -> "INSERT INTO keyed VALUES (NULL, 'missing')",
+    "duplicate within one batch" -> "INSERT INTO keyed VALUES (2, 'two'), (2, 'again')",
+    "duplicate existing row" -> "INSERT INTO keyed VALUES (1, 'again')",
+    "duplicate after affinity" -> "INSERT INTO keyed VALUES ('1', 'text one')"
+  )
+
+  primaryKeyViolations.foreach: (scenario, sql) =>
+    test(s"PRIMARY KEY rejects $scenario without changing the table"):
+      val database = Database()
+      assert(database.execute("CREATE TABLE keyed (id INTEGER PRIMARY KEY, label TEXT)").isRight)
+      assert(database.execute("INSERT INTO keyed VALUES (1, 'one')").isRight)
+      assert(database.execute(sql).isLeft)
+      assertEquals(
+        database.execute("SELECT * FROM keyed"),
+        Right(Result.Query(
+          Vector("id", "label"),
+          Vector(Vector(Value.Integer(1), Value.Text("one")))
+        ))
+      )
+
+  test("PRIMARY KEY rejects an UPDATE collision atomically"):
+    val database = Database()
+    assert(database.execute("CREATE TABLE keyed (id INTEGER PRIMARY KEY, label TEXT)").isRight)
+    assert(database.execute("INSERT INTO keyed VALUES (1, 'one'), (2, 'two')").isRight)
+    assert(database.execute("UPDATE keyed SET id = 1 WHERE id = 2").isLeft)
+    assertEquals(
+      database.execute("SELECT * FROM keyed"),
+      Right(
+        Result.Query(
+          Vector("id", "label"),
+          Vector(
+            Vector(Value.Integer(1), Value.Text("one")),
+            Vector(Value.Integer(2), Value.Text("two"))
+          )
+        )
+      )
+    )

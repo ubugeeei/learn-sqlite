@@ -120,6 +120,28 @@ class FileBackendSuite extends munit.FunSuite:
         )
       )
 
+  test("PRIMARY KEY violations never change durable rows"):
+    val path = temporaryDatabase("durable-primary-key")
+    withDatabase(path): database =>
+      assert(database.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").isRight)
+      assert(database.execute("INSERT INTO users VALUES (1, 'Ada'), (2, 'Grace')").isRight)
+      assert(database.execute("INSERT INTO users VALUES (3, 'Linus'), (1, 'duplicate')").isLeft)
+      assert(database.execute("UPDATE users SET id = 1 WHERE id = 2").isLeft)
+
+    withDatabase(path): database =>
+      assertEquals(
+        database.execute("SELECT * FROM users"),
+        Right(
+          Result.Query(
+            Vector("id", "name"),
+            Vector(
+              Vector(Value.Integer(1), Value.Text("Ada")),
+              Vector(Value.Integer(2), Value.Text("Grace"))
+            )
+          )
+        )
+      )
+
   private def temporaryDatabase(prefix: String): Path =
     Files.createTempDirectory(prefix).resolve("app.db")
 
