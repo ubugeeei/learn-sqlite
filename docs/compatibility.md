@@ -14,7 +14,7 @@ reference when prose is ambiguous.
 | SQL | `CREATE TABLE`, `INSERT`, `SELECT`, `DELETE` | joins, aggregates, DDL changes |
 | Types | integer, real, text, blob, null | affinities and strict tables |
 | Storage | fixed-size pages, ordered table B-tree | byte-compatible SQLite pages |
-| Transactions | single-process atomic commit | WAL and multi-process locking |
+| Transactions | before-image rollback for mutating backend calls | SQL transactions, WAL, locking |
 | API | Scala API and REPL | JDBC driver |
 
 Semantic differences are tested and documented rather than hidden. This makes
@@ -23,4 +23,3 @@ replacement for production SQLite.
 
 [lang]: https://www.sqlite.org/lang.html
 [format]: https://www.sqlite.org/fileformat.html
-

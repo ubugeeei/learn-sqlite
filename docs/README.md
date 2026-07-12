@@ -53,6 +53,7 @@ operations. Treat those warnings as design feedback.
 
 - [Start here: database foundations](00-database-foundations.md)
 - [Glossary](glossary.md)
+- [Coverage audit: implemented, partial, and missing](coverage.md)
 - [Scope, non-goals, and compatibility](compatibility.md)
 - [Roadmap and implementation milestones](roadmap.md)
 - [Architecture: from SQL text to durable bytes](architecture.md)

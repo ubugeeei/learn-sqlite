@@ -82,14 +82,14 @@ Goal: keep lookup logarithmic as the file grows.
 - Root replacement without changing the public root id.
 - Overflow chains for payloads larger than local cell space.
 
-## M7: rollback transactions
+## M7: rollback transactions — implemented foundation
 
 Goal: survive a crash at every point in commit.
 
-- Dirty-page cache and before-images.
-- Journal header, sync barriers, and atomic commit point.
-- Hot-journal detection and recovery.
-- Fault-injection filesystem tests.
+- Before-images, forced private journal, and atomic commit marker.
+- Hot-journal detection, checksum validation, and recovery.
+- Original file-length restoration after allocation.
+- Remaining: dirty-page cache and exhaustive filesystem fault injection.
 
 ## M8: SQLite-compatible pages
 
