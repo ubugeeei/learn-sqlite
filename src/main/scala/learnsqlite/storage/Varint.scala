@@ -2,14 +2,14 @@ package learnsqlite.storage
 
 import java.nio.ByteBuffer
 
-/** SQLite's 1–9 byte, big-endian variable-length unsigned integer.
-  *
-  * The first eight bytes contribute seven bits each. A ninth byte, when
-  * present, contributes all eight bits. See
-  * [[https://www.sqlite.org/fileformat.html#varint Varint]]. Values are carried
-  * in a signed `Long`; negative values represent unsigned values with bit 63
-  * set, exactly as the SQLite serial representation needs.
-  */
+/**
+ * SQLite's 1–9 byte, big-endian variable-length unsigned integer.
+ *
+ * The first eight bytes contribute seven bits each. A ninth byte, when present, contributes all
+ * eight bits. See [[https://www.sqlite.org/fileformat.html#varint Varint]]. Values are carried in a
+ * signed `Long`; negative values represent unsigned values with bit 63 set, exactly as the SQLite
+ * serial representation needs.
+ */
 object Varint:
   val MaxBytes = 9
 

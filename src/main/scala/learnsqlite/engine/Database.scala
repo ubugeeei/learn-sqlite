@@ -4,28 +4,37 @@ import learnsqlite.core.*
 import learnsqlite.sql.*
 
 sealed trait DatabaseError derives CanEqual:
+  /** Stable diagnostic suitable for a CLI or API response. */
   def message: String
 final case class SyntaxFailure(error: ParseError) extends DatabaseError:
   def message = error.toString
 final case class ExecutionFailure(message: String) extends DatabaseError
 
 enum Result:
+  /** A table became available, including a successful `IF NOT EXISTS`. */
   case Created(table: String)
+
+  /** Number of rows inserted or deleted. */
   case Modified(rows: Int)
+
+  /** Ordered column labels and result rows. */
   case Query(columns: Vector[String], rows: Vector[Vector[Value]])
 
 /**
  * Mutable database handle with immutable rows at its boundaries.
  *
  * Mutation is intentionally confined here. Parsing, schemas, values, and expression evaluation
- * remain pure and independently testable.
+ * remain pure and independently testable. Supplying a [[Backend]] selects memory or file durability
+ * without changing SQL semantics.
  */
 final class Database(private val backend: Backend = MemoryBackend())
     extends AutoCloseable:
 
+  /** Parses and executes one SQL statement. */
   def execute(sql: String): Either[DatabaseError, Result] =
     Parser.parse(sql).left.map(SyntaxFailure.apply).flatMap(execute)
 
+  /** Executes an already parsed statement. */
   def execute(statement: Statement): Either[DatabaseError, Result] =
     statement match
       case value: Statement.CreateTable => create(value)
@@ -33,8 +42,11 @@ final class Database(private val backend: Backend = MemoryBackend())
       case value: Statement.Select      => select(value)
       case value: Statement.Delete      => delete(value)
 
+  /** Forces preceding writes through the backend durability boundary. */
   def flush(): Either[DatabaseError, Unit] =
     backend.flush().left.map(ExecutionFailure.apply)
+
+  /** Closes the backend owned by this handle. */
   override def close(): Unit = backend.close()
 
   private def create(statement: Statement.CreateTable) =

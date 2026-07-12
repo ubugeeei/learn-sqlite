@@ -19,7 +19,7 @@ object Parser:
             val _ = parser.accept(TokenKind.Semicolon)
             parser.expect(TokenKind.End, "end of input").map(_ => value)
 
-  private final class Implementation(tokens: Vector[Token]):
+  final private class Implementation(tokens: Vector[Token]):
     private var index = 0
     private def current = tokens(index)
 
@@ -30,38 +30,41 @@ object Parser:
       else if keyword("DELETE") then delete()
       else fail("expected CREATE, INSERT, SELECT, or DELETE")
 
-    private def createTable(): Either[ParseError, Statement] = for
-      _ <- requireKeyword("TABLE")
-      ifNotExists = optionalKeywords("IF", "NOT", "EXISTS")
-      name <- identifier()
-      _ <- expect(TokenKind.LeftParen, "'('")
-      columns <- commaSeparated(columnDefinition())
-      _ <- expect(TokenKind.RightParen, "')'")
-    yield Statement.CreateTable(name, columns, ifNotExists)
+    private def createTable(): Either[ParseError, Statement] =
+      for
+        _ <- requireKeyword("TABLE")
+        ifNotExists = optionalKeywords("IF", "NOT", "EXISTS")
+        name <- identifier()
+        _ <- expect(TokenKind.LeftParen, "'('")
+        columns <- commaSeparated(columnDefinition())
+        _ <- expect(TokenKind.RightParen, "')'")
+      yield Statement.CreateTable(name, columns, ifNotExists)
 
-    private def columnDefinition(): Either[ParseError, ColumnDefinition] = for
-      name <- identifier()
-      declaredType = current.kind match
-        case TokenKind.Word(value)
-            if !Set("PRIMARY", "NOT", "NULL").contains(upper(value)) =>
-          index += 1; Some(value)
-        case _ => None
-      primary = optionalKeywords("PRIMARY", "KEY")
-      notNull = optionalKeywords("NOT", "NULL")
-    yield ColumnDefinition(name, declaredType, primary, !notNull)
+    private def columnDefinition(): Either[ParseError, ColumnDefinition] =
+      for
+        name <- identifier()
+        declaredType = current.kind match
+          case TokenKind.Word(value)
+              if !Set("PRIMARY", "NOT", "NULL").contains(upper(value)) =>
+            index += 1; Some(value)
+          case _ => None
+        primary = optionalKeywords("PRIMARY", "KEY")
+        notNull = optionalKeywords("NOT", "NULL")
+      yield ColumnDefinition(name, declaredType, primary, !notNull)
 
-    private def insert(): Either[ParseError, Statement] = for
-      _ <- requireKeyword("INTO")
-      table <- identifier()
-      columns <-
-        if accept(TokenKind.LeftParen) then
-          commaSeparated(identifier()).flatMap(values =>
-            expect(TokenKind.RightParen, "')'").map(_ => values)
-          )
-        else Right(Vector.empty)
-      _ <- requireKeyword("VALUES")
-      rows <- commaSeparated(parenthesizedExpressions())
-    yield Statement.Insert(table, columns, rows)
+    private def insert(): Either[ParseError, Statement] =
+      for
+        _ <- requireKeyword("INTO")
+        table <- identifier()
+        columns <-
+          if accept(TokenKind.LeftParen) then
+            commaSeparated(identifier()).flatMap(values =>
+              expect(TokenKind.RightParen, "')'").map(_ => values)
+            )
+          else Right(Vector.empty)
+        _ <- requireKeyword("VALUES")
+        rows <- commaSeparated(parenthesizedExpressions())
+      yield Statement.Insert(table, columns, rows)
 
     private def parenthesizedExpressions(): Either[ParseError, Vector[Expr]] =
       for
@@ -70,12 +73,13 @@ object Parser:
         _ <- expect(TokenKind.RightParen, "')'")
       yield values
 
-    private def select(): Either[ParseError, Statement] = for
-      projection <- commaSeparated(selectItem())
-      _ <- requireKeyword("FROM")
-      table <- identifier()
-      predicate <- optionalWhere()
-    yield Statement.Select(projection, table, predicate)
+    private def select(): Either[ParseError, Statement] =
+      for
+        projection <- commaSeparated(selectItem())
+        _ <- requireKeyword("FROM")
+        table <- identifier()
+        predicate <- optionalWhere()
+      yield Statement.Select(projection, table, predicate)
 
     private def selectItem(): Either[ParseError, SelectItem] =
       if accept(TokenKind.Star) then Right(SelectItem.All)
@@ -85,11 +89,12 @@ object Parser:
             if keyword("AS") then identifier().map(Some(_)) else Right(None)
           alias.map(SelectItem.Expression(expr, _))
 
-    private def delete(): Either[ParseError, Statement] = for
-      _ <- requireKeyword("FROM")
-      table <- identifier()
-      predicate <- optionalWhere()
-    yield Statement.Delete(table, predicate)
+    private def delete(): Either[ParseError, Statement] =
+      for
+        _ <- requireKeyword("FROM")
+        table <- identifier()
+        predicate <- optionalWhere()
+      yield Statement.Delete(table, predicate)
 
     private def optionalWhere(): Either[ParseError, Option[Expr]] =
       if keyword("WHERE") then expression().map(Some(_)) else Right(None)
@@ -149,7 +154,7 @@ object Parser:
         index += 1; Right(Expr.Value(Literal.Text(value)))
       case TokenKind.Word(value) if upper(value) == "NULL" =>
         index += 1; Right(Expr.Value(Literal.Null))
-      case TokenKind.Word(_)   => identifier().map(Expr.Column(_))
+      case TokenKind.Word(_) => identifier().map(Expr.Column(_))
       case TokenKind.LeftParen =>
         index += 1
         expression().flatMap(value =>
@@ -158,9 +163,9 @@ object Parser:
       case _ => fail("expected expression")
 
     private def binaryLoop(
-        initial: Either[ParseError, Expr],
-        operators: Map[TokenKind, BinaryOperator],
-        next: () => Either[ParseError, Expr]
+      initial: Either[ParseError, Expr],
+      operators: Map[TokenKind, BinaryOperator],
+      next: () => Either[ParseError, Expr]
     ): Either[ParseError, Expr] =
       initial.flatMap: first =>
         var result: Either[ParseError, Expr] = Right(first)
@@ -170,9 +175,9 @@ object Parser:
         result
 
     private def chain(
-        initial: Either[ParseError, Expr],
-        words: Set[String],
-        operator: String => BinaryOperator
+      initial: Either[ParseError, Expr],
+      words: Set[String],
+      operator: String => BinaryOperator
     ): Either[ParseError, Expr] = initial.flatMap: first =>
       var result: Either[ParseError, Expr] = Right(first)
       while current.kind match
@@ -187,7 +192,7 @@ object Parser:
       result
 
     private def commaSeparated[A](
-        first: => Either[ParseError, A]
+      first: => Either[ParseError, A]
     ): Either[ParseError, Vector[A]] =
       first.flatMap: head =>
         val values = Vector.newBuilder[A]; values += head

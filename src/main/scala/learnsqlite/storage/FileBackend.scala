@@ -6,7 +6,13 @@ import learnsqlite.sql.{ColumnDefinition, Identifier}
 
 import java.nio.file.Path
 
-/** File-backed SQL storage using catalog, record codec, B-tree, and pager. */
+/**
+ * File-backed SQL storage using catalog, record codec, B-tree, and pager.
+ *
+ * One instance owns one pager and must be closed. Schemas live in the catalog tree rooted at page
+ * zero; each user table owns a distinct stable root. Row payloads use SQLite's record format even
+ * though the surrounding page format remains private.
+ */
 final class FileBackend private (pager: Pager, catalog: Catalog)
     extends Backend:
   def create(
@@ -101,6 +107,12 @@ final class FileBackend private (pager: Pager, catalog: Catalog)
     )
 
 object FileBackend:
+  /**
+   * Opens an existing database or initializes an empty one at `path`.
+   *
+   * Opening validates the private header and catalog root. A failed open closes the underlying file
+   * descriptor before returning the error.
+   */
   def open(
     path: Path,
     pageSize: Int = Pager.DefaultPageSize

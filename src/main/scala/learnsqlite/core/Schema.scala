@@ -7,8 +7,8 @@ final case class Column(index: Int, definition: ColumnDefinition)
 
 /** Ordered table schema with case-insensitive name resolution. */
 final class Schema private (
-    val columns: Vector[Column],
-    private val byName: Map[String, Column]
+  val columns: Vector[Column],
+  private val byName: Map[String, Column]
 ):
   def resolve(name: Identifier): Option[Column] = byName.get(name.normalized)
   def size: Int = columns.size
@@ -23,7 +23,7 @@ object Schema:
           case (name, values) if values.size > 1 => name
       duplicate match
         case Some(name) => Left(s"duplicate column: $name")
-        case None       =>
+        case None =>
           val columns = definitions.zipWithIndex.map((definition, index) =>
             Column(index, definition)
           )

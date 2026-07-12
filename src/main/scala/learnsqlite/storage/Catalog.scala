@@ -3,7 +3,7 @@ package learnsqlite.storage
 import learnsqlite.sql.{ColumnDefinition, Identifier}
 import learnsqlite.core.Value
 
-/** Persistent schema entry stored in the catalog B-tree. */
+/** Complete metadata needed to reopen one table without scanning its data pages. */
 final case class CatalogEntry(
   name: Identifier,
   columns: Vector[ColumnDefinition],
@@ -19,14 +19,18 @@ final case class CatalogEntry(
  */
 final class Catalog private (tree: TableBTree):
   import Catalog.*
+
+  /** Returns every table sorted by normalized name, validating every catalog record. */
   def tables: Either[StorageError, Vector[CatalogEntry]] =
     tree.scan.flatMap(entries =>
       traverse(entries)(_._2).map(_.sortBy(_.name.normalized))
     )
 
+  /** Performs SQLite-style case-insensitive table-name lookup. */
   def find(name: Identifier): Either[StorageError, Option[CatalogEntry]] =
     tables.map(_.find(_.name.normalized == name.normalized))
 
+  /** Adds one unique schema entry under a monotonically increasing catalog rowid. */
   def add(entry: CatalogEntry): Either[StorageError, Unit] =
     find(entry.name).flatMap:
       case Some(_) =>
@@ -46,6 +50,7 @@ final class Catalog private (tree: TableBTree):
         result.flatMap(values => decode(bytes(entry)).map(values :+ _))
 
 object Catalog:
+  /** Opens or initializes the catalog at the database's first B-tree root. */
   def open(pager: Pager): Either[StorageError, Catalog] =
     TableBTree.open(pager).map(Catalog(_))
 

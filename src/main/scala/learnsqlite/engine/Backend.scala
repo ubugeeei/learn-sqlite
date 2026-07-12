@@ -10,18 +10,38 @@ import learnsqlite.sql.{ColumnDefinition, Identifier}
  * This keeps identical SQL semantics for memory and file-backed databases.
  */
 trait Backend extends AutoCloseable:
+  /** Creates an empty table after validating its schema. */
   def create(
     name: Identifier,
     columns: Vector[ColumnDefinition]
   ): Either[String, Unit]
+
+  /** Resolves a table case-insensitively or returns a user-facing error. */
   def table(name: Identifier): Either[String, StoredTable]
+
+  /** Establishes the backend's durability barrier for preceding writes. */
   def flush(): Either[String, Unit]
+
+  /** Releases files or other resources owned by this backend. */
   override def close(): Unit
 
+/**
+ * Row-oriented operations required by the SQL interpreter.
+ *
+ * Implementations must not expose mutable aliases. Input rows have already passed schema
+ * validation, but the backend remains responsible for all-or-error storage behavior.
+ */
 trait StoredTable:
+  /** Ordered schema used to interpret every returned row. */
   def schema: Schema
+
+  /** Materializes rows in rowid order. */
   def rows: Either[String, Vector[Row]]
+
+  /** Adds a validated batch without changing existing row order. */
   def append(rows: Vector[Row]): Either[String, Unit]
+
+  /** Replaces the complete logical contents of the table. */
   def replace(rows: Vector[Row]): Either[String, Unit]
 
 final private[engine] class MemoryBackend extends Backend:

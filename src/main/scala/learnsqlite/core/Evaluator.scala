@@ -2,16 +2,16 @@ package learnsqlite.core
 
 import learnsqlite.sql.*
 
-/** Evaluates scalar expressions using SQLite-like numeric and NULL semantics.
-  *
-  * See
-  * [[https://www.sqlite.org/lang_expr.html Operators and Parse-Affecting Attributes]].
-  */
+/**
+ * Evaluates scalar expressions using SQLite-like numeric and NULL semantics.
+ *
+ * See [[https://www.sqlite.org/lang_expr.html Operators and Parse-Affecting Attributes]].
+ */
 object Evaluator:
   def apply(expression: Expr, schema: Schema, row: Row): Either[String, Value] =
     expression match
       case Expr.Value(literal) => Right(fromLiteral(literal))
-      case Expr.Column(name)   =>
+      case Expr.Column(name) =>
         schema
           .resolve(name)
           .map(row(_))
@@ -26,7 +26,7 @@ object Evaluator:
         yield result
 
   def literal(expression: Expr): Either[String, Value] = expression match
-    case Expr.Value(value)                         => Right(fromLiteral(value))
+    case Expr.Value(value) => Right(fromLiteral(value))
     case Expr.Unary(UnaryOperator.Negate, operand) =>
       literal(operand).flatMap(unary(UnaryOperator.Negate, _))
     case _ => Left("INSERT values must be constant literals")
@@ -40,10 +40,10 @@ object Evaluator:
     case other            => Left(s"${other.render} is not a boolean value")
 
   private def unary(
-      operator: UnaryOperator,
-      value: Value
+    operator: UnaryOperator,
+    value: Value
   ): Either[String, Value] = operator match
-    case UnaryOperator.Not    => truth(value).map(result => fromTruth(!result))
+    case UnaryOperator.Not => truth(value).map(result => fromTruth(!result))
     case UnaryOperator.Negate =>
       value match
         case Value.Null           => Right(Value.Null)
@@ -52,9 +52,9 @@ object Evaluator:
         case _                    => Left("unary minus requires a number")
 
   private def binary(
-      left: Value,
-      operator: BinaryOperator,
-      right: Value
+    left: Value,
+    operator: BinaryOperator,
+    right: Value
   ): Either[String, Value] =
     operator match
       case BinaryOperator.And            => boolean(left, right, _ and _)
@@ -68,22 +68,22 @@ object Evaluator:
       case BinaryOperator.Add            => numeric(left, right, _ + _, _ + _)
       case BinaryOperator.Subtract       => numeric(left, right, _ - _, _ - _)
       case BinaryOperator.Multiply       => numeric(left, right, _ * _, _ * _)
-      case BinaryOperator.Divide         =>
+      case BinaryOperator.Divide =>
         (left, right) match
           case (_, Value.Integer(0) | Value.Real(0.0)) => Right(Value.Null)
-          case _ => numeric(left, right, _ / _, _ / _)
+          case _                                       => numeric(left, right, _ / _, _ / _)
 
   private def boolean(left: Value, right: Value, f: (Truth, Truth) => Truth) =
     for lhs <- truth(left); rhs <- truth(right) yield fromTruth(f(lhs, rhs))
 
   private def numeric(
-      left: Value,
-      right: Value,
-      ints: (Long, Long) => Long,
-      reals: (Double, Double) => Double
+    left: Value,
+    right: Value,
+    ints: (Long, Long) => Long,
+    reals: (Double, Double) => Double
   ) =
     (left, right) match
-      case (Value.Null, _) | (_, Value.Null)    => Right(Value.Null)
+      case (Value.Null, _) | (_, Value.Null) => Right(Value.Null)
       case (Value.Integer(a), Value.Integer(b)) =>
         Right(Value.Integer(ints(a, b)))
       case (Value.Integer(a), Value.Real(b)) =>
@@ -91,12 +91,12 @@ object Evaluator:
       case (Value.Real(a), Value.Integer(b)) =>
         Right(Value.Real(reals(a, b.toDouble)))
       case (Value.Real(a), Value.Real(b)) => Right(Value.Real(reals(a, b)))
-      case _ => Left("arithmetic requires numeric operands")
+      case _                              => Left("arithmetic requires numeric operands")
 
   private def compare(
-      left: Value,
-      right: Value,
-      predicate: Int => Boolean
+    left: Value,
+    right: Value,
+    predicate: Int => Boolean
   ): Either[String, Value] =
     if left == Value.Null || right == Value.Null then Right(Value.Null)
     else

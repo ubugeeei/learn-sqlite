@@ -5,12 +5,13 @@ import learnsqlite.core.Value
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets.UTF_8
 
-/** Encodes rows using SQLite's record format and serial type codes.
-  *
-  * A record is a varint-sized header followed by payload bytes. The header
-  * contains one varint serial type per value. See
-  * [[https://www.sqlite.org/fileformat.html#record_format Record Format]].
-  */
+/**
+ * Encodes rows using SQLite's record format and serial type codes.
+ *
+ * A record is a varint-sized header followed by payload bytes. The header contains one varint
+ * serial type per value. See
+ * [[https://www.sqlite.org/fileformat.html#record_format Record Format]].
+ */
 object RecordCodec:
   def encode(values: Vector[Value]): Either[StorageError, Array[Byte]] =
     val fields = values.map(field)
@@ -46,12 +47,12 @@ object RecordCodec:
       )
     yield values
 
-  private final case class EncodedField(serialType: Long, payload: Array[Byte])
+  final private case class EncodedField(serialType: Long, payload: Array[Byte])
 
   private def field(value: Value): EncodedField = value match
-    case Value.Null            => EncodedField(0, Array.emptyByteArray)
-    case Value.Integer(0)      => EncodedField(8, Array.emptyByteArray)
-    case Value.Integer(1)      => EncodedField(9, Array.emptyByteArray)
+    case Value.Null       => EncodedField(0, Array.emptyByteArray)
+    case Value.Integer(0) => EncodedField(8, Array.emptyByteArray)
+    case Value.Integer(1) => EncodedField(9, Array.emptyByteArray)
     case Value.Integer(number) =>
       val width = integerWidth(number)
       EncodedField(serialTypeForWidth(width), signedBytes(number, width))
@@ -73,14 +74,14 @@ object RecordCodec:
     size
 
   private def readSerialTypes(
-      input: ByteBuffer,
-      headerEnd: Int
+    input: ByteBuffer,
+    headerEnd: Int
   ): Either[StorageError, Vector[Long]] =
     val result = Vector.newBuilder[Long]
     while input.position() < headerEnd do
       Varint.get(input) match
         case Right(value) if input.position() <= headerEnd => result += value
-        case Right(_)                                      =>
+        case Right(_) =>
           return Left(StorageError("serial type crosses record header"))
         case Left(error) => return Left(error)
     Either.cond(
@@ -90,8 +91,8 @@ object RecordCodec:
     )
 
   private def decodeField(
-      serialType: Long,
-      input: ByteBuffer
+    serialType: Long,
+    input: ByteBuffer
   ): Either[StorageError, Value] = serialType match
     case 0 => Right(Value.Null)
     case 1 => readInteger(input, 1)
@@ -121,8 +122,8 @@ object RecordCodec:
     case _ => Left(StorageError(s"invalid serial type: $serialType"))
 
   private def readInteger(
-      input: ByteBuffer,
-      width: Int
+    input: ByteBuffer,
+    width: Int
   ): Either[StorageError, Value] =
     take(input, width).map: bytes =>
       var result = if (bytes.head & 0x80) != 0 then -1L else 0L
@@ -150,8 +151,8 @@ object RecordCodec:
     Array.tabulate(width)(index => (value >>> ((width - index - 1) * 8)).toByte)
 
   private def take(
-      input: ByteBuffer,
-      count: Int
+    input: ByteBuffer,
+    count: Int
   ): Either[StorageError, Array[Byte]] =
     if count < 0 || input.remaining() < count then
       Left(StorageError("truncated record payload"))
@@ -159,23 +160,23 @@ object RecordCodec:
       val bytes = Array.ofDim[Byte](count); input.get(bytes); Right(bytes)
 
   private def checkedInt(
-      value: Long,
-      label: String
+    value: Long,
+    label: String
   ): Either[StorageError, Int] =
     if value < 0 || value > Int.MaxValue then
       Left(StorageError(s"$label is too large"))
     else Right(value.toInt)
 
   private def traverseUnit[A](
-      values: Vector[A]
+    values: Vector[A]
   )(f: A => Either[StorageError, Unit]): Either[StorageError, Unit] =
     values.foldLeft(Right(()): Either[StorageError, Unit])((result, value) =>
       result.flatMap(_ => f(value))
     )
 
   private def traverseVector[A, B](values: Vector[A])(
-      f: A => Either[StorageError, B]
+    f: A => Either[StorageError, B]
   ): Either[StorageError, Vector[B]] =
-    values.foldLeft(Right(Vector.empty): Either[StorageError, Vector[B]])(
-      (result, value) => result.flatMap(acc => f(value).map(acc :+ _))
+    values.foldLeft(Right(Vector.empty): Either[StorageError, Vector[B]])((result, value) =>
+      result.flatMap(acc => f(value).map(acc :+ _))
     )

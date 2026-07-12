@@ -14,17 +14,18 @@ object PageId:
 
 final case class StorageError(message: String) extends Exception(message)
 
-/** Fixed-size page I/O for the private LSQL format.
-  *
-  * The design mirrors SQLite's pager boundary, described by
-  * [[https://www.sqlite.org/arch.html The Architecture Of SQLite]], while the
-  * bytes intentionally use a distinct magic header to prevent format confusion.
-  */
+/**
+ * Fixed-size page I/O for the private LSQL format.
+ *
+ * The design mirrors SQLite's pager boundary, described by
+ * [[https://www.sqlite.org/arch.html The Architecture Of SQLite]], while the bytes intentionally
+ * use a distinct magic header to prevent format confusion.
+ */
 final class Pager private (
-    val path: Path,
-    val pageSize: Int,
-    private val file: RandomAccessFile,
-    private val channel: FileChannel
+  val path: Path,
+  val pageSize: Int,
+  private val file: RandomAccessFile,
+  private val channel: FileChannel
 ) extends AutoCloseable:
   import Pager.HeaderSize
 
@@ -72,8 +73,8 @@ object Pager:
   val DefaultPageSize = 4096
 
   def open(
-      path: Path,
-      pageSize: Int = DefaultPageSize
+    path: Path,
+    pageSize: Int = DefaultPageSize
   ): Either[StorageError, Pager] =
     if pageSize < 512 || Integer.bitCount(pageSize) != 1 then
       Left(
@@ -94,10 +95,10 @@ object Pager:
       else validate(path, pageSize, file, channel)
 
   private def validate(
-      path: Path,
-      requested: Int,
-      file: RandomAccessFile,
-      channel: FileChannel
+    path: Path,
+    requested: Int,
+    file: RandomAccessFile,
+    channel: FileChannel
   ) =
     val header = ByteBuffer.allocate(HeaderSize)
     while header.hasRemaining && channel.read(header) >= 0 do ()
@@ -120,9 +121,9 @@ object Pager:
       else Right(Pager(path, storedSize, file, channel))
 
   private def closeWith(
-      file: RandomAccessFile,
-      channel: FileChannel,
-      message: String
+    file: RandomAccessFile,
+    channel: FileChannel,
+    message: String
   ) =
     channel.close()
     file.close()

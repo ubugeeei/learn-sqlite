@@ -1,10 +1,11 @@
 package learnsqlite.core
 
-/** SQLite's five storage classes.
-  *
-  * See [[https://www.sqlite.org/datatype3.html SQLite Datatypes]]. BLOB
-  * equality is content based even though the underlying JVM array is mutable.
-  */
+/**
+ * SQLite's five storage classes.
+ *
+ * See [[https://www.sqlite.org/datatype3.html SQLite Datatypes]]. BLOB equality is content based
+ * even though the underlying JVM array is mutable.
+ */
 enum Value:
   case Null
   case Integer(value: Long)

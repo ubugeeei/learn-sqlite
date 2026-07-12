@@ -16,17 +16,18 @@ enum TokenKind:
 final case class Token(kind: TokenKind, position: SourcePosition)
 final case class LexError(message: String, position: SourcePosition)
 
-/** Converts SQL text to positioned tokens.
-  *
-  * The accepted lexical forms follow SQLite's
-  * [[https://www.sqlite.org/lang_expr.html literal syntax]] where applicable.
-  */
+/**
+ * Converts SQL text to positioned tokens.
+ *
+ * The accepted lexical forms follow SQLite's
+ * [[https://www.sqlite.org/lang_expr.html literal syntax]] where applicable.
+ */
 object Lexer:
   def tokenize(input: String): Either[LexError, Vector[Token]] =
     val scanner = Scanner(input)
     scanner.scanAll()
 
-  private final class Scanner(input: String):
+  final private class Scanner(input: String):
     private var offset = 0
     private var line = 1
     private var column = 1
@@ -42,7 +43,7 @@ object Lexer:
             case Left(error)  => failure = Some(error)
       failure match
         case Some(error) => Left(error)
-        case None => Right(result.result() :+ Token(TokenKind.End, position))
+        case None        => Right(result.result() :+ Token(TokenKind.End, position))
 
     private def skipTrivia(): Unit =
       var continuing = true
@@ -120,7 +121,7 @@ object Lexer:
       else Left(LexError("unterminated string literal", start))
 
     private def quotedIdentifier(
-        start: SourcePosition
+      start: SourcePosition
     ): Either[LexError, Token] =
       advance()
       val value = StringBuilder()
