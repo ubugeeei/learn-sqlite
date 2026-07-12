@@ -101,6 +101,25 @@ class FileBackendSuite extends munit.FunSuite:
         )
       )
 
+  test("affinity-derived storage classes survive record encoding and reopen"):
+    val path = temporaryDatabase("durable-affinity")
+    withDatabase(path): database =>
+      assert(database.execute(
+        "CREATE TABLE measurements (label TEXT, amount NUMERIC, ratio REAL)"
+      ).isRight)
+      assert(database.execute("INSERT INTO measurements VALUES (42, '3.0e+5', '2.5')").isRight)
+
+    withDatabase(path): database =>
+      assertEquals(
+        database.execute("SELECT * FROM measurements"),
+        Right(
+          Result.Query(
+            Vector("label", "amount", "ratio"),
+            Vector(Vector(Value.Text("42"), Value.Integer(300_000), Value.Real(2.5)))
+          )
+        )
+      )
+
   private def temporaryDatabase(prefix: String): Path =
     Files.createTempDirectory(prefix).resolve("app.db")
 

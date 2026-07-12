@@ -146,3 +146,27 @@ class DatabaseSuite extends munit.FunSuite:
           Vector(Vector(Value.Integer(1)), Vector(Value.Integer(2)))
         ))
       )
+
+  test("column affinity converts values before storage"):
+    val database = Database()
+    assert(database.execute(
+      "CREATE TABLE affinity_values (as_text TEXT, as_numeric NUMERIC, as_integer INTEGER, as_real REAL, unchanged BLOB)"
+    ).isRight)
+    assert(database.execute(
+      "INSERT INTO affinity_values VALUES (500, '500.0', '500.0', '500.0', '500.0')"
+    ).isRight)
+    assertEquals(
+      database.execute("SELECT * FROM affinity_values"),
+      Right(
+        Result.Query(
+          Vector("as_text", "as_numeric", "as_integer", "as_real", "unchanged"),
+          Vector(Vector(
+            Value.Text("500"),
+            Value.Integer(500),
+            Value.Integer(500),
+            Value.Real(500.0),
+            Value.Text("500.0")
+          ))
+        )
+      )
+    )
