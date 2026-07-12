@@ -3,7 +3,9 @@ package learnsqlite.core
 import learnsqlite.sql.ColumnDefinition
 import learnsqlite.sql.Identifier
 
-final case class Column(index: Int, definition: ColumnDefinition)
+final case class Column(index: Int, definition: ColumnDefinition):
+  /** Preferred storage conversion derived from the SQL declared type. */
+  val affinity: Affinity = Affinity.fromDeclaredType(definition.declaredType)
 
 /** Ordered table schema with case-insensitive name resolution. */
 final class Schema private (
@@ -47,12 +49,13 @@ object Row:
     if values.size != schema.size then
       Left(s"expected ${schema.size} values, got ${values.size}")
     else
+      val storedValues = schema.columns.map(column => column.affinity(values(column.index)))
       schema.columns.collectFirst:
         case column
-            if !column.definition.nullable && values(
+            if !column.definition.nullable && storedValues(
               column.index
             ) == Value.Null =>
           column.definition.name.value
       match
         case Some(name) => Left(s"column $name may not be NULL")
-        case None       => Right(Row(values))
+        case None       => Right(Row(storedValues))
