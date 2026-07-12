@@ -62,7 +62,7 @@ Goal: represent logical rows as compact, specified bytes.
 Lie: these records live inside our educational leaf page layout, not yet an
 exact SQLite B-tree page.
 
-## M5: persistent catalog — next
+## M5: persistent catalog — implemented
 
 Goal: reopen a SQL database, discover tables, and execute queries.
 
@@ -71,7 +71,7 @@ Goal: reopen a SQL database, discover tables, and execute queries.
 - Decode catalog rows and rebuild schemas on open.
 - Connect row records to the SQL executor behind a storage trait.
 
-Demo: create and populate a database, exit the process, reopen, and query it.
+Demo: create and populate a database, exit the process, reopen, query it, and persist deletion.
 
 ## M6: recursive B-tree
 
@@ -117,4 +117,3 @@ Goal: separate compilation from execution and exploit indexes.
 - Happy paths, boundaries, invalid input, and reopen behavior are tested.
 - The chapter explains what changed, why, and what remains deliberately false.
 - The commit is conventional and small enough to review independently.
-
