@@ -50,6 +50,25 @@ final private[storage] class OverflowPages(pager: Pager):
         case (_, None)        => Left(StorageError("payload is missing its overflow chain"))
         case (_, Some(first)) => loadChain(first, remaining).map(reference.local.clone() ++ _)
 
+  /** Returns every page owned by a validated overflow chain. */
+  def pageIds(reference: PayloadRef): Either[StorageError, Vector[PageId]] =
+    val remaining = reference.totalLength - reference.local.length
+    if reference.totalLength < 0 || remaining < 0 then
+      Left(StorageError("invalid local payload length"))
+    else
+      (remaining, reference.overflow) match
+        case (0, None)        => Right(Vector.empty)
+        case (0, Some(_))     => Left(StorageError("payload has an unnecessary overflow chain"))
+        case (_, None)        => Left(StorageError("payload is missing its overflow chain"))
+        case (_, Some(first)) => collectPageIds(first, remaining)
+
+  /** Releases all pages owned by one validated payload reference. */
+  def release(reference: PayloadRef): Either[StorageError, Unit] =
+    pageIds(reference).flatMap: ids =>
+      ids.foldLeft(Right(()): Either[StorageError, Unit])((result, id) =>
+        result.flatMap(_ => pager.release(id))
+      )
+
   private def loadChain(first: PageId, expectedLength: Int): Either[StorageError, Array[Byte]] =
     val output = Array.newBuilder[Byte]
     val visited = scala.collection.mutable.Set.empty[Int]
@@ -73,6 +92,32 @@ final private[storage] class OverflowPages(pager: Pager):
               case (false, None) => Left(StorageError("overflow chain is shorter than payload"))
               case (false, Some(next)) => loop(next, nextCollected)
     loop(first, 0)
+
+  private def collectPageIds(
+    first: PageId,
+    expectedLength: Int
+  ): Either[StorageError, Vector[PageId]] =
+    val visited = scala.collection.mutable.Set.empty[Int]
+    def loop(
+      id: PageId,
+      collected: Int,
+      ids: Vector[PageId]
+    ): Either[StorageError, Vector[PageId]] =
+      if visited.contains(id.value) then Left(StorageError("overflow page cycle detected"))
+      else
+        visited += id.value
+        pager.read(id).flatMap(decode).flatMap: page =>
+          val nextCollected = collected + page.bytes.length
+          if nextCollected > expectedLength then
+            Left(StorageError("overflow payload exceeds declared length"))
+          else
+            (nextCollected == expectedLength, page.next) match
+              case (true, None) => Right(ids :+ id)
+              case (true, Some(_)) =>
+                Left(StorageError("overflow chain continues past payload end"))
+              case (false, None) => Left(StorageError("overflow chain is shorter than payload"))
+              case (false, Some(next)) => loop(next, nextCollected, ids :+ id)
+    loop(first, 0, Vector.empty)
 
   private def allocateIds(count: Int): Either[StorageError, Vector[PageId]] =
     (0 until count).foldLeft(Right(Vector.empty): Either[StorageError, Vector[PageId]]):

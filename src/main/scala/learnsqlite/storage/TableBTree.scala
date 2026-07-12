@@ -52,16 +52,20 @@ final class TableBTree private (pager: Pager, root: PageId):
   /**
    * Replaces all entries while preserving the root page id.
    *
-   * Existing descendant pages become unreachable and await the freelist milestone. This operation
-   * is used by the current simple DELETE implementation.
+   * Existing descendant and overflow pages are marked free before replacement entries are inserted,
+   * allowing the pager to reuse them in the same transaction.
    */
   def replace(entries: Vector[(Long, Array[Byte])]): Either[StorageError, Unit] =
     val duplicate = entries.map(_._1).groupBy(identity).exists(_._2.size > 1)
     if duplicate then Left(StorageError("replacement contains duplicate keys"))
     else
-      write(root, Leaf(Vector.empty, None)).flatMap: _ =>
-        entries.sortBy(_._1).foldLeft(Right(()): Either[StorageError, Unit]):
-          case (result, (key, value)) => result.flatMap(_ => insert(key, value))
+      ownedPages(root, includeNode = false).flatMap: obsolete =>
+        write(root, Leaf(Vector.empty, None)).flatMap: _ =>
+          obsolete.foldLeft(Right(()): Either[StorageError, Unit])((result, id) =>
+            result.flatMap(_ => pager.release(id))
+          ).flatMap: _ =>
+            entries.sortBy(_._1).foldLeft(Right(()): Either[StorageError, Unit]):
+              case (result, (key, value)) => result.flatMap(_ => insert(key, value))
 
   private def find(id: PageId, key: Long): Either[StorageError, Option[Leaf]] =
     read(id).flatMap:
@@ -141,6 +145,19 @@ final class TableBTree private (pager: Pager, root: PageId):
         result.flatMap(entries =>
           overflowPages.load(cell.payload).map(bytes => entries :+ (cell.key -> bytes))
         )
+
+  private def ownedPages(id: PageId, includeNode: Boolean): Either[StorageError, Vector[PageId]] =
+    read(id).flatMap:
+      case Leaf(entries, _) =>
+        entries.foldLeft(Right(Vector.empty): Either[StorageError, Vector[PageId]]):
+          case (result, cell) =>
+            result.flatMap(ids => overflowPages.pageIds(cell.payload).map(ids ++ _))
+        .map(ids => if includeNode then id +: ids else ids)
+      case Interior(_, children) =>
+        children.foldLeft(Right(Vector.empty): Either[StorageError, Vector[PageId]]):
+          case (result, child) =>
+            result.flatMap(ids => ownedPages(child, includeNode = true).map(ids ++ _))
+        .map(ids => if includeNode then id +: ids else ids)
 
 object TableBTree:
   sealed private trait Node
