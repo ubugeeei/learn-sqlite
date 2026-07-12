@@ -28,6 +28,7 @@ final class Pager private (
   private val channel: FileChannel
 ) extends AutoCloseable:
   import Pager.HeaderSize
+  private var transactionJournal: Option[RollbackJournal] = None
 
   def pageCount: Int = ((channel.size() - HeaderSize) / pageSize).toInt
 
@@ -54,10 +55,41 @@ final class Pager private (
     else if id.value > pageCount then
       Left(StorageError("pages must be allocated sequentially"))
     else
-      val buffer = ByteBuffer.wrap(bytes.clone())
-      var position = fileOffset(id)
-      while buffer.hasRemaining do position += channel.write(buffer, position)
-      Right(())
+      val capture = transactionJournal match
+        case Some(journal) if id.value < pageCount => read(id).flatMap(journal.capture(id, _))
+        case _                                     => Right(())
+      capture.flatMap(_ => rawWrite(id, bytes))
+
+  /**
+   * Executes page changes as one rollback-journal transaction.
+   *
+   * A returned `Left` restores original pages immediately. A process crash leaves a hot journal,
+   * which [[Pager.open]] restores before serving reads.
+   */
+  def transaction[A](operation: => Either[StorageError, A]): Either[StorageError, A] =
+    if transactionJournal.nonEmpty then
+      Left(StorageError("nested pager transactions are not supported"))
+    else
+      RollbackJournal.create(path, pageSize, pageCount).flatMap: journal =>
+        transactionJournal = Some(journal)
+        val result =
+          try operation
+          catch
+            case error: Exception => Left(StorageError(s"transaction failed: ${error.getMessage}"))
+        result match
+          case Right(value) =>
+            try
+              force()
+              transactionJournal = None
+              journal.remove().map(_ => value)
+            catch
+              case error: java.io.IOException =>
+                val _ = rollback(journal)
+                Left(StorageError(s"failed to commit transaction: ${error.getMessage}"))
+          case Left(error) =>
+            rollback(journal) match
+              case Right(_)            => Left(error)
+              case Left(rollbackError) => Left(rollbackError)
 
   def force(): Unit = channel.force(true)
   override def close(): Unit =
@@ -65,6 +97,29 @@ final class Pager private (
     file.close()
   private def fileOffset(id: PageId): Long =
     HeaderSize.toLong + id.value.toLong * pageSize
+
+  private def rawWrite(id: PageId, bytes: Array[Byte]): Either[StorageError, Unit] =
+    try
+      val buffer = ByteBuffer.wrap(bytes.clone())
+      var position = fileOffset(id)
+      while buffer.hasRemaining do position += channel.write(buffer, position)
+      Right(())
+    catch
+      case error: java.io.IOException =>
+        Left(StorageError(s"page write failed: ${error.getMessage}"))
+
+  private def rollback(journal: RollbackJournal): Either[StorageError, Unit] =
+    transactionJournal = None
+    val restored = journal.beforeImages.foldLeft(Right(()): Either[StorageError, Unit]):
+      case (result, (id, bytes)) => result.flatMap(_ => rawWrite(id, bytes))
+    restored.flatMap: _ =>
+      try
+        file.setLength(HeaderSize.toLong + journal.originalPageCount.toLong * pageSize)
+        force()
+        journal.remove()
+      catch
+        case error: java.io.IOException =>
+          Left(StorageError(s"rollback failed: ${error.getMessage}"))
 
 object Pager:
   private val Magic =
@@ -92,7 +147,34 @@ object Pager:
           val _ = channel.write(header)
         channel.force(true)
         Right(Pager(path, pageSize, file, channel))
-      else validate(path, pageSize, file, channel)
+      else
+        recover(path, pageSize, file, channel) match
+          case Right(_) => validate(path, pageSize, file, channel)
+          case Left(error) =>
+            channel.close()
+            file.close()
+            Left(error)
+
+  private def recover(
+    path: Path,
+    pageSize: Int,
+    file: RandomAccessFile,
+    channel: FileChannel
+  ): Either[StorageError, Unit] =
+    RollbackJournal.load(path, pageSize).flatMap:
+      case None => Right(())
+      case Some(journal) =>
+        try
+          journal.beforeImages.foreach: (id, bytes) =>
+            val buffer = ByteBuffer.wrap(bytes)
+            var position = HeaderSize.toLong + id.value.toLong * pageSize
+            while buffer.hasRemaining do position += channel.write(buffer, position)
+          file.setLength(HeaderSize.toLong + journal.originalPageCount.toLong * pageSize)
+          channel.force(true)
+          journal.remove()
+        catch
+          case error: java.io.IOException =>
+            Left(StorageError(s"hot journal recovery failed: ${error.getMessage}"))
 
   private def validate(
     path: Path,
