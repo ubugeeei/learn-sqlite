@@ -51,6 +51,11 @@ enum SelectItem:
   case All
   case Expression(expression: Expr, alias: Option[Identifier])
 
+enum SortDirection:
+  case Ascending, Descending
+
+final case class OrderingTerm(expression: Expr, direction: SortDirection)
+
 /**
  * The supported SQL statement subset.
  *
@@ -75,7 +80,9 @@ enum Statement:
   case Select(
     projection: Vector[SelectItem],
     from: Identifier,
-    where: Option[Expr]
+    where: Option[Expr],
+    orderBy: Vector[OrderingTerm],
+    limit: Option[Int]
   )
   case Delete(table: Identifier, where: Option[Expr])
   case Update(

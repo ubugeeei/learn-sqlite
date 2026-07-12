@@ -80,7 +80,31 @@ object Parser:
         _ <- requireKeyword("FROM")
         table <- identifier()
         predicate <- optionalWhere()
-      yield Statement.Select(projection, table, predicate)
+        ordering <- optionalOrderBy()
+        limit <- optionalLimit()
+      yield Statement.Select(projection, table, predicate, ordering, limit)
+
+    private def optionalOrderBy(): Either[ParseError, Vector[OrderingTerm]] =
+      if optionalKeywords("ORDER", "BY") then commaSeparated(orderingTerm())
+      else Right(Vector.empty)
+
+    private def orderingTerm(): Either[ParseError, OrderingTerm] =
+      expression().map: expression =>
+        val direction =
+          if keyword("DESC") then SortDirection.Descending
+          else
+            val _ = keyword("ASC")
+            SortDirection.Ascending
+        OrderingTerm(expression, direction)
+
+    private def optionalLimit(): Either[ParseError, Option[Int]] =
+      if keyword("LIMIT") then
+        current.kind match
+          case TokenKind.Integer(value) if value >= 0 && value <= Int.MaxValue =>
+            index += 1
+            Right(Some(value.toInt))
+          case _ => fail("expected a non-negative LIMIT integer")
+      else Right(None)
 
     private def selectItem(): Either[ParseError, SelectItem] =
       if accept(TokenKind.Star) then Right(SelectItem.All)

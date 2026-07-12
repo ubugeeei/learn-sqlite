@@ -77,6 +77,21 @@ class ParserSuite extends munit.FunSuite:
     assertEquals(update.assignments.map(_._1), Vector(Identifier("balance"), Identifier("name")))
     assert(update.where.nonEmpty)
 
+  test("parse SELECT ordering directions and LIMIT"):
+    val select = Parser
+      .parse("SELECT id FROM events WHERE id > 0 ORDER BY priority DESC, id ASC LIMIT 10")
+      .toOption
+      .get
+      .asInstanceOf[Statement.Select]
+    assertEquals(
+      select.orderBy,
+      Vector(
+        OrderingTerm(Expr.Column(Identifier("priority")), SortDirection.Descending),
+        OrderingTerm(Expr.Column(Identifier("id")), SortDirection.Ascending)
+      )
+    )
+    assertEquals(select.limit, Some(10))
+
   private val invalidStatements = Vector(
     ("unterminated text", "SELECT 'oops FROM t", "unterminated", SourcePosition(7, 1, 8)),
     ("trailing token", "SELECT * FROM t nonsense", "end of input", SourcePosition(16, 1, 17)),
