@@ -23,6 +23,24 @@ Grace
 
 The path through the system is now real:
 
+```mermaid
+sequenceDiagram
+  participant User
+  participant DB as Database
+  participant Backend as FileBackend
+  participant Catalog
+  participant Tree as TableBTree
+  participant Pager
+  User->>DB: CREATE TABLE people (...)
+  DB->>Backend: create(name, columns)
+  Backend->>Tree: allocate table root
+  Backend->>Catalog: add schema + root page
+  Catalog->>Tree: insert catalog record
+  Tree->>Pager: write changed pages
+  Backend->>Pager: force
+  Pager-->>User: success
+```
+
 ```text
 CREATE TABLE
   -> Parser
@@ -51,6 +69,9 @@ reopen + SELECT
 
 ## 8.1 Give every table a stable root
 
+“Root” means the page id saved as the entrance to one tree. It stays stable even when that tree
+allocates more leaf pages.
+
 The first B-tree implementation assumed page zero was always its root. That supports exactly one
 tree. A database needs at least one catalog tree plus one tree for every table and index.
 
@@ -69,6 +90,18 @@ The test creates two roots with the same rowid and different values. Reopening e
 only its own value. This catches the common mistake of retaining an implicit global root.
 
 ## 8.2 Design the minimum catalog record
+
+The catalog is an address book for tables. Without it, page 5 contains bytes but the database does
+not know whether those bytes belong to `people`, `orders`, or an index.
+
+```mermaid
+flowchart TD
+  OPEN["Open database"] --> CAT["Read catalog at page 0"]
+  CAT --> PEOPLE["people → root 1 + schema"]
+  CAT --> ORDERS["orders → root 5 + schema"]
+  PEOPLE --> PTREE["Open B-tree at page 1"]
+  ORDERS --> OTREE["Open B-tree at page 5"]
+```
 
 SQLite's [`sqlite_schema` table][schema-table] stores object type, name, owning table, root page, and
 original SQL. Our private catalog needs enough information to reconstruct the typed `Schema` without
@@ -246,4 +279,3 @@ before-images, journal sync ordering, fault injection, and hot-journal recovery.
 the file format should be treated as rebuildable experimental data.
 
 [schema-table]: https://www.sqlite.org/schematab.html
-
