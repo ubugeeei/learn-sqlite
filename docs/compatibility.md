@@ -11,7 +11,7 @@ reference when prose is ambiguous.
 
 | Area | Initial milestone | Future work |
 |---|---|---|
-| SQL | `CREATE TABLE`, `INSERT`, `SELECT`, `DELETE` | joins, aggregates, DDL changes |
+| SQL | `CREATE TABLE`, `INSERT`, `SELECT`, `UPDATE`, `DELETE` | joins, aggregates, DDL changes |
 | Types | integer, real, text, blob, null | affinities and strict tables |
 | Storage | fixed-size pages, ordered table B-tree | byte-compatible SQLite pages |
 | Transactions | before-image rollback for mutating backend calls | SQL transactions, WAL, locking |

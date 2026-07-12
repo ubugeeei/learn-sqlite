@@ -40,7 +40,7 @@ Reference: [SQLite SQL Language](https://www.sqlite.org/lang.html)
 | `SELECT` projection and `WHERE` | parser/evaluator | database suite | Chapters 1, 2 | 🟡 one table only |
 | `DELETE` and `WHERE` | parser/database | database/file suites | Chapters 1, 8 | 🟡 no order/limit/returning |
 | Operator precedence | `Parser.scala` | parser suite | Chapter 1 | 🟡 arithmetic/comparison/boolean subset |
-| `UPDATE` | — | — | glossary only | ⬜ |
+| `UPDATE ... SET ... WHERE` | parser/database/file backend | parser/semantic/reopen suites | Chapter 9 | 🟡 core subset |
 | `DROP` / `ALTER` | — | — | roadmap mention | ⬜ |
 | Joins and subqueries | — | — | roadmap mention | ⬜ |
 | Grouping and aggregates | — | — | roadmap mention | ⬜ |
