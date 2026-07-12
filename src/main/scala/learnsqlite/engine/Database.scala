@@ -115,6 +115,7 @@ final class Database(private val backend: Backend = MemoryBackend())
     table(statement.from).flatMap: target =>
       val checked = statement.projection
         .collect { case SelectItem.Expression(expr, _) => expr }
+        .concat(statement.orderBy.map(_.expression))
         .foldLeft(Right(()): Either[String, Unit])((result, expr) =>
           result.flatMap(_ => validate(expr, target.schema))
         )
@@ -125,13 +126,40 @@ final class Database(private val backend: Backend = MemoryBackend())
         )
       selected.left
         .map(ExecutionFailure.apply)
-        .flatMap: rows =>
+        .flatMap(rows =>
+          orderRows(rows, statement.orderBy, target.schema).left.map(ExecutionFailure.apply)
+        )
+        .flatMap: orderedRows =>
+          val rows = statement.limit.fold(orderedRows)(orderedRows.take)
           val columns = projectionNames(statement.projection, target.schema)
           traverse(rows)(row =>
             project(statement.projection, target.schema, row)
           ).left
             .map(ExecutionFailure.apply)
             .map(Result.Query(columns, _))
+
+  private def orderRows(
+    rows: Vector[Row],
+    terms: Vector[OrderingTerm],
+    schema: Schema
+  ): Either[String, Vector[Row]] =
+    if terms.isEmpty then Right(rows)
+    else
+      traverse(rows.zipWithIndex): (row, originalIndex) =>
+        traverse(terms)(term => Evaluator(term.expression, schema, row)).map: keys =>
+          (row, keys, originalIndex)
+      .map: decorated =>
+        decorated.sortWith: (left, right) =>
+          val comparison = terms.indices.iterator
+            .map: index =>
+              val raw = Value.compare(left._2(index), right._2(index))
+              terms(index).direction match
+                case SortDirection.Ascending  => raw
+                case SortDirection.Descending => -raw
+            .find(_ != 0)
+            .getOrElse(left._3.compare(right._3))
+          comparison < 0
+        .map(_._1)
 
   private def validate(expression: Expr, schema: Schema): Either[String, Unit] =
     expression match

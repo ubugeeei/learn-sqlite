@@ -209,3 +209,30 @@ class DatabaseSuite extends munit.FunSuite:
         )
       )
     )
+
+  test("ORDER BY supports multiple directions, NULL, and LIMIT"):
+    val database = Database()
+    assert(
+      database.execute("CREATE TABLE scores (name TEXT, score NUMERIC, priority INTEGER)").isRight
+    )
+    assert(database.execute(
+      "INSERT INTO scores VALUES ('none', NULL, 9), ('Ada', 10, 2), ('Grace', 10.0, 1), ('Linus', 7, 3)"
+    ).isRight)
+    assertEquals(
+      database.execute("SELECT name FROM scores ORDER BY score DESC, priority ASC LIMIT 3"),
+      Right(
+        Result.Query(
+          Vector("name"),
+          Vector(
+            Vector(Value.Text("Grace")),
+            Vector(Value.Text("Ada")),
+            Vector(Value.Text("Linus"))
+          )
+        )
+      )
+    )
+
+  test("ORDER BY rejects an unknown column even for an empty table"):
+    val database = Database()
+    assert(database.execute("CREATE TABLE empty_table (id INTEGER)").isRight)
+    assert(database.execute("SELECT * FROM empty_table ORDER BY missing").isLeft)

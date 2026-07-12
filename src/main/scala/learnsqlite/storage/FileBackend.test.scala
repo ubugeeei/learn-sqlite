@@ -142,6 +142,23 @@ class FileBackendSuite extends munit.FunSuite:
         )
       )
 
+  test("ORDER BY and LIMIT operate on rows loaded after reopen"):
+    val path = temporaryDatabase("durable-ordering")
+    withDatabase(path): database =>
+      assert(
+        database.execute("CREATE TABLE queue (id INTEGER PRIMARY KEY, priority INTEGER)").isRight
+      )
+      assert(database.execute("INSERT INTO queue VALUES (1, 2), (2, 3), (3, 3), (4, 1)").isRight)
+
+    withDatabase(path): database =>
+      assertEquals(
+        database.execute("SELECT id FROM queue ORDER BY priority DESC, id DESC LIMIT 2"),
+        Right(Result.Query(
+          Vector("id"),
+          Vector(Vector(Value.Integer(3)), Vector(Value.Integer(2)))
+        ))
+      )
+
   private def temporaryDatabase(prefix: String): Path =
     Files.createTempDirectory(prefix).resolve("app.db")
 
