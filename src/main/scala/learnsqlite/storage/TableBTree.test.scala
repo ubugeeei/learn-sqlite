@@ -90,3 +90,43 @@ class TableBTreeSuite extends munit.FunSuite:
     assert(tree.replace(Vector(3L -> Array[Byte](3))).isRight)
     assertEquals(tree.scan.toOption.get.map(_._1), Vector(3L))
     pager.close()
+
+  private val largeInsertionOrders = Vector[(String, Vector[Long])](
+    "ascending" -> (1L to 1_500L).toVector,
+    "descending" -> (1_500L to 1L by -1L).toVector,
+    "alternating edges" -> {
+      val lows = (1L to 750L).toVector
+      val highs = (1_500L to 751L by -1L).toVector
+      lows.zip(highs).flatMap((low, high) => Vector(low, high))
+    }
+  )
+
+  largeInsertionOrders.foreach: (scenario, keys) =>
+    test(s"grow a multi-level tree under $scenario insertion"):
+      val path = Files.createTempDirectory(s"deep-tree-$scenario").resolve("tree.db")
+      val pager = Pager.open(path, 512).toOption.get
+      val tree = TableBTree.open(pager).toOption.get
+      val payload = Array.fill[Byte](32)(42)
+      keys.foreach(key => assert(tree.insert(key, payload).isRight, s"failed at key $key"))
+      assert(pager.pageCount > 100, "test data should require interior-page splits")
+      assertEquals(tree.scan.toOption.get.map(_._1), (1L to 1_500L).toVector)
+      Vector(1L, 2L, 749L, 750L, 751L, 1_499L, 1_500L).foreach: key =>
+        assertEquals(tree.get(key).toOption.flatten.map(_.toVector), Some(payload.toVector))
+      pager.force()
+      pager.close()
+
+      val reopenedPager = Pager.open(path, 512).toOption.get
+      val reopened = TableBTree.open(reopenedPager).toOption.get
+      assertEquals(reopened.scan.toOption.get.size, 1_500)
+      assertEquals(reopened.get(1_234L).toOption.flatten.map(_.toVector), Some(payload.toVector))
+      reopenedPager.close()
+
+  test("reject a payload that needs overflow pages before mutating the tree"):
+    val pager =
+      Pager.open(Files.createTempDirectory("large-payload").resolve("tree.db"), 512).toOption.get
+    val tree = TableBTree.open(pager).toOption.get
+    val pagesBefore = pager.pageCount
+    assert(tree.insert(1, Array.fill[Byte](512)(1)).left.toOption.get.message.contains("overflow"))
+    assertEquals(pager.pageCount, pagesBefore)
+    assertEquals(tree.scan, Right(Vector.empty))
+    pager.close()
