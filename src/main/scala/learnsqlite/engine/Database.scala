@@ -84,11 +84,17 @@ final class Database(private val backend: Backend = MemoryBackend())
       prepared.left
         .map(ExecutionFailure.apply)
         .flatMap: rows =>
-          target
-            .append(rows)
-            .left
-            .map(ExecutionFailure.apply)
-            .map(_ => Result.Modified(rows.size))
+          target.rows.left.map(ExecutionFailure.apply).flatMap: existing =>
+            target.schema
+              .validateRows(existing ++ rows)
+              .left
+              .map(ExecutionFailure.apply)
+              .flatMap: _ =>
+                target
+                  .append(rows)
+                  .left
+                  .map(ExecutionFailure.apply)
+                  .map(_ => Result.Modified(rows.size))
 
   private def prepareRow(
     schema: Schema,
@@ -182,8 +188,14 @@ final class Database(private val backend: Backend = MemoryBackend())
                     Row.checked(target.schema, updated.toVector).map(_ -> true)
             .left.map(ExecutionFailure.apply).flatMap: updates =>
               val changed = updates.count(_._2)
-              target.replace(updates.map(_._1)).left
-                .map(ExecutionFailure.apply).map(_ => Result.Modified(changed))
+              val updatedRows = updates.map(_._1)
+              target.schema
+                .validateRows(updatedRows)
+                .left
+                .map(ExecutionFailure.apply)
+                .flatMap: _ =>
+                  target.replace(updatedRows).left
+                    .map(ExecutionFailure.apply).map(_ => Result.Modified(changed))
 
   private def matches(
     predicate: Option[Expr],

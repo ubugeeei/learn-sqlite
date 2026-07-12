@@ -15,6 +15,22 @@ final class Schema private (
   def resolve(name: Identifier): Option[Column] = byName.get(name.normalized)
   def size: Int = columns.size
 
+  /** Validates constraints that require seeing the complete table, currently PRIMARY KEY. */
+  def validateRows(rows: Vector[Row]): Either[String, Unit] =
+    columns.find(_.definition.primaryKey) match
+      case None => Right(())
+      case Some(primaryKey) =>
+        val values = rows.map(_(primaryKey))
+        if values.contains(Value.Null) then
+          Left(s"PRIMARY KEY column ${primaryKey.definition.name.value} may not be NULL")
+        else
+          values.groupBy(Value.constraintKey).collectFirst:
+            case (_, duplicates) if duplicates.size > 1 =>
+              s"duplicate PRIMARY KEY value for ${primaryKey.definition.name.value}"
+          match
+            case Some(error) => Left(error)
+            case None        => Right(())
+
 object Schema:
   def from(definitions: Vector[ColumnDefinition]): Either[String, Schema] =
     if definitions.isEmpty then Left("a table needs at least one column")
@@ -52,7 +68,7 @@ object Row:
       val storedValues = schema.columns.map(column => column.affinity(values(column.index)))
       schema.columns.collectFirst:
         case column
-            if !column.definition.nullable && storedValues(
+            if (!column.definition.nullable || column.definition.primaryKey) && storedValues(
               column.index
             ) == Value.Null =>
           column.definition.name.value

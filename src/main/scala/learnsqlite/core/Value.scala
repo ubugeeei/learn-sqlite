@@ -23,6 +23,11 @@ enum Value:
 object Value:
   def blob(bytes: Array[Byte]): Value = Blob(bytes.clone())
 
+  /** Content-based key used by table constraints, including BLOB byte equality. */
+  private[core] def constraintKey(value: Value): Any = value match
+    case Blob(bytes) => ("blob", bytes.toVector)
+    case other       => other
+
 /** SQLite truth values include unknown, represented by NULL in SQL. */
 enum Truth:
   case True, False, Unknown
