@@ -105,3 +105,52 @@ class PagerSuite extends munit.FunSuite:
       val journalPath = RollbackJournal.pathFor(path)
       Files.write(journalPath, corrupt(Files.readAllBytes(journalPath)))
       assert(Pager.open(path, 512).isLeft)
+
+  test("reuse the lowest free page across reopen"):
+    val path = Files.createTempDirectory("pager-free-reuse").resolve("data.db")
+    val pager = Pager.open(path, 512).toOption.get
+    val first = pager.allocate().toOption.get
+    val second = pager.allocate().toOption.get
+    assert(pager.release(first).isRight)
+    assertEquals(pager.freePageCount, Right(1))
+    pager.force()
+    pager.close()
+
+    val reopened = Pager.open(path, 512).toOption.get
+    assertEquals(reopened.freePageCount, Right(1))
+    assertEquals(reopened.allocate(), Right(first))
+    assertEquals(reopened.pageCount, second.value + 1)
+    assertEquals(reopened.freePageCount, Right(0))
+    reopened.close()
+
+  test("reject double release without changing the freelist"):
+    val pager = Pager.open(
+      Files.createTempDirectory("pager-double-free").resolve("data.db"),
+      512
+    ).toOption.get
+    val id = pager.allocate().toOption.get
+    assert(pager.release(id).isRight)
+    assert(pager.release(id).left.toOption.get.message.contains("already free"))
+    assertEquals(pager.freePageCount, Right(1))
+    pager.close()
+
+  test("rollback restores both free and allocated page states"):
+    val pager = Pager.open(
+      Files.createTempDirectory("pager-free-rollback").resolve("data.db"),
+      512
+    ).toOption.get
+    val used = pager.allocate().toOption.get
+    val free = pager.allocate().toOption.get
+    assert(pager.release(free).isRight)
+    val result = pager.transaction:
+      for
+        reused <- pager.allocate()
+        _ = assertEquals(reused, free)
+        _ <- pager.release(used)
+        failure <- Left(StorageError("injected freelist failure"))
+      yield failure
+    assertEquals(result, Left(StorageError("injected freelist failure")))
+    assertEquals(pager.freePageCount, Right(1))
+    assertEquals(pager.allocate(), Right(free))
+    assert(pager.read(used).isRight)
+    pager.close()

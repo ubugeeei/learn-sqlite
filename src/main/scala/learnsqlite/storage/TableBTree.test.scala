@@ -141,3 +141,31 @@ class TableBTreeSuite extends munit.FunSuite:
     expected.foreach: (key, payload) =>
       assertEquals(reopened.get(key).toOption.flatten.map(_.toVector), Some(payload))
     reopenedPager.close()
+
+  test("replace reclaims descendant and overflow pages for bounded growth"):
+    val path = Files.createTempDirectory("tree-reclamation").resolve("tree.db")
+    val pager = Pager.open(path, 512).toOption.get
+    val tree = TableBTree.open(pager).toOption.get
+    val largeRows = Vector.tabulate(80): index =>
+      (index.toLong + 1) -> Array.fill[Byte](900)((index % 251).toByte)
+    assert(tree.replace(largeRows).isRight)
+    val highWaterMark = pager.pageCount
+    assert(highWaterMark > 100)
+
+    val smallRows = largeRows.take(10)
+    assert(tree.replace(smallRows).isRight)
+    assert(pager.freePageCount.toOption.get > 100)
+    assertEquals(tree.scan.toOption.get.map(_._1), (1L to 10L).toVector)
+
+    val replacement =
+      largeRows.map((key, _) => key -> Array.fill[Byte](900)(((key + 7) % 251).toByte))
+    assert(tree.replace(replacement).isRight)
+    assertEquals(pager.pageCount, highWaterMark)
+    assertEquals(tree.scan.toOption.get.size, 80)
+    pager.force()
+    pager.close()
+
+    val reopened = Pager.open(path, 512).toOption.get
+    assertEquals(reopened.pageCount, highWaterMark)
+    assert(TableBTree.open(reopened).toOption.get.get(80).toOption.flatten.nonEmpty)
+    reopened.close()
