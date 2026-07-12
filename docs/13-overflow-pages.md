@@ -127,9 +127,8 @@ scala-cli test . --test-only learnsqlite.storage.FileBackendSuite
 
 ## Remaining space-management work
 
-Replaced or deleted overflow chains are currently unreachable but not reused. The next storage
-milestone is a freelist that records free page ids transactionally. Exact SQLite compatibility also
+Replaced or deleted overflow chains are reclaimed by the private freelist described in
+[14. Reusing Pages After UPDATE and DELETE](14-free-page-reuse.md). Exact SQLite compatibility still
 requires its payload-fraction formulas instead of this fixed 64-byte local prefix.
 
 See the [Coverage Audit](coverage.md).
-

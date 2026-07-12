@@ -81,7 +81,8 @@ Goal: keep lookup logarithmic as the file grows.
 - Stable-root growth without changing the catalog page id.
 - Multi-level reopen tests under adversarial insertion orders.
 - Overflow chains with corruption detection and rollback-safe allocation.
-- Remaining: deletion rebalancing and freelist reuse.
+- Transactional reclamation and reuse of descendant/overflow pages.
+- Remaining: cell-level deletion rebalancing and SQLite freelist trunk format.
 
 ## M7: rollback transactions — implemented foundation
 

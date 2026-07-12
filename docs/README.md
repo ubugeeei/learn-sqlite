@@ -86,6 +86,7 @@ reserved values, invalid UTF-8, and defensive copying.
 - [11. PRIMARY KEY as a table-wide constraint](11-primary-key.md)
 - [12. ORDER BY and LIMIT](12-order-by-limit.md)
 - [13. Storing large records with overflow pages](13-overflow-pages.md)
+- [14. Reusing pages after UPDATE and DELETE](14-free-page-reuse.md)
 - Database header and page-1 special handling
 - Free pages and the freelist trunk
 - Interior B-tree pages and recursive splitting

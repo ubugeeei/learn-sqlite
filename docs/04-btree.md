@@ -289,8 +289,7 @@ scala-cli test . --test-only learnsqlite.storage.TableBTreeSuite
 
 The tree now has logarithmic lookup and recursive split propagation. It still lacks:
 
-- cell-level deletion and merge/rebalance;
-- a freelist to reuse unreachable pages;
+- cell-level deletion and sibling rebalancing (full replacement does reclaim pages);
 - index B-trees with composite encoded keys;
 - SQLite's exact cell pointer and payload fraction format;
 - page-cache pinning and cursor-safe concurrent mutation.

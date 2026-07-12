@@ -83,7 +83,8 @@ Reference: [Database File Format](https://www.sqlite.org/fileformat.html)
 | Page-1 100-byte header | — | none | ⬜ |
 | Large payload overflow chains | `OverflowPages.scala`, SQL reopen tests | private format | ✅ |
 | SQLite payload fraction formulas | fixed 64-byte local prefix | none | ⬜ |
-| Freelist trunk/leaves | — | none | ⬜ |
+| Transactional free-page reuse | pager markers, bounded-growth/reopen tests | private format | ✅ |
+| SQLite freelist trunk/header count | scan-based private markers | none | ⬜ |
 | Pointer-map pages/autovacuum | — | none | ⬜ |
 
 ## B-tree and access methods
@@ -98,7 +99,8 @@ Reference: [B-tree Pages](https://www.sqlite.org/fileformat.html#b_tree_pages)
 | Defensive payload copying | alias-mutation test | ✅ |
 | Interior nodes | `TableBTree.Interior`, 1,500-key tests | ✅ |
 | Recursive split propagation | leaf/interior/root split protocol | ✅ |
-| Cell deletion/rebalancing | full-tree rewrite only | ⬜ |
+| Full-tree replacement with reclamation | stable root + transactional free reuse | ✅ |
+| Cell deletion/rebalancing | — | ⬜ |
 | Index B-tree | — | ⬜ |
 | Logarithmic lookup | recursive separator descent | ✅ |
 
