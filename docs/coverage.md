@@ -44,7 +44,8 @@ Reference: [SQLite SQL Language](https://www.sqlite.org/lang.html)
 | `DROP` / `ALTER` | — | — | roadmap mention | ⬜ |
 | Joins and subqueries | — | — | roadmap mention | ⬜ |
 | Grouping and aggregates | — | — | roadmap mention | ⬜ |
-| Ordering, limit, compound select | — | — | — | ⬜ |
+| `ORDER BY` and `LIMIT count` | parser/interpreter | mixed values/reopen suites | Chapter 12 | 🟡 core subset |
+| Compound SELECT | — | — | — | ⬜ |
 | CTEs, windows, triggers, views | — | — | — | ⬜ |
 | Pragmas and attach | — | — | — | ⬜ |
 
