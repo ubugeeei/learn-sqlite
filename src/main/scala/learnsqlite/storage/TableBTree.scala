@@ -2,19 +2,20 @@ package learnsqlite.storage
 
 import java.nio.ByteBuffer
 
-/** A durable ordered table B+tree leaf chain keyed by 64-bit row id.
-  *
-  * This milestone implements leaf splitting and ordered scans. Interior pages
-  * are the next scaling step; the on-disk distinction follows SQLite's
-  * [[https://www.sqlite.org/fileformat.html#b_tree_pages B-tree page kinds]].
-  */
+/**
+ * A durable ordered table B+tree leaf chain keyed by 64-bit row id.
+ *
+ * This milestone implements leaf splitting and ordered scans. Interior pages are the next scaling
+ * step; the on-disk distinction follows SQLite's
+ * [[https://www.sqlite.org/fileformat.html#b_tree_pages B-tree page kinds]].
+ */
 final class TableBTree private (pager: Pager, root: PageId):
   import TableBTree.*
 
   def get(key: Long): Either[StorageError, Option[Array[Byte]]] =
     foldLeaves[Option[Array[Byte]]](None):
       case (found @ Some(_), _) => Right(found)
-      case (None, leaf)         =>
+      case (None, leaf) =>
         Right(leaf.entries.find(_._1 == key).map(_._2.clone()))
 
   def scan: Either[StorageError, Vector[(Long, Array[Byte])]] =
@@ -33,6 +34,25 @@ final class TableBTree private (pager: Pager, root: PageId):
         if encodedSize(updated) <= pager.pageSize then write(id, updated)
         else split(id, updated)
 
+  /**
+   * Replaces every entry while preserving the stable root page id.
+   *
+   * Existing continuation pages become unreachable and are reclaimed by the future freelist
+   * milestone. Keeping the root stable is essential because catalog records refer to it.
+   */
+  def replace(
+    entries: Vector[(Long, Array[Byte])]
+  ): Either[StorageError, Unit] =
+    val duplicate = entries.map(_._1).groupBy(identity).exists(_._2.size > 1)
+    if duplicate then Left(StorageError("replacement contains duplicate keys"))
+    else
+      write(root, Leaf(Vector.empty, None)).flatMap: _ =>
+        entries
+          .sortBy(_._1)
+          .foldLeft(Right(()): Either[StorageError, Unit]):
+            case (result, (key, value)) =>
+              result.flatMap(_ => insert(key, value))
+
   private def split(id: PageId, leaf: Leaf): Either[StorageError, Unit] =
     val middle = leaf.entries.size / 2
     for
@@ -42,8 +62,8 @@ final class TableBTree private (pager: Pager, root: PageId):
     yield pager.force()
 
   private def locate(
-      id: PageId,
-      key: Long
+    id: PageId,
+    key: Long
   ): Either[StorageError, (PageId, Leaf)] =
     read(id).flatMap: leaf =>
       if leaf.entries.lastOption.forall(_._1 >= key) || leaf.next.isEmpty then
@@ -51,7 +71,7 @@ final class TableBTree private (pager: Pager, root: PageId):
       else locate(leaf.next.get, key)
 
   private def foldLeaves[A](initial: A)(
-      f: (A, Leaf) => Either[StorageError, A]
+    f: (A, Leaf) => Either[StorageError, A]
   ): Either[StorageError, A] =
     def loop(id: PageId, accumulated: A): Either[StorageError, A] =
       read(id).flatMap(leaf =>
@@ -67,9 +87,9 @@ final class TableBTree private (pager: Pager, root: PageId):
     pager.write(id, encode(leaf, pager.pageSize))
 
 object TableBTree:
-  private final case class Leaf(
-      entries: Vector[(Long, Array[Byte])],
-      next: Option[PageId]
+  final private case class Leaf(
+    entries: Vector[(Long, Array[Byte])],
+    next: Option[PageId]
   )
   private val LeafKind: Byte = 13
   private val HeaderBytes = 9
@@ -85,6 +105,19 @@ object TableBTree:
     else
       val root = PageId(0)
       pager.read(root).flatMap(decode).map(_ => TableBTree(pager, root))
+
+  /** Allocates an empty tree and returns its stable root page. */
+  def create(pager: Pager): Either[StorageError, (PageId, TableBTree)] =
+    pager
+      .allocate()
+      .flatMap: root =>
+        pager
+          .write(root, encode(Leaf(Vector.empty, None), pager.pageSize))
+          .map(_ => root -> TableBTree(pager, root))
+
+  /** Opens a tree rooted at a catalog-provided page id. */
+  def at(pager: Pager, root: PageId): Either[StorageError, TableBTree] =
+    pager.read(root).flatMap(decode).map(_ => TableBTree(pager, root))
 
   private def encodedSize(leaf: Leaf): Int =
     HeaderBytes + leaf.entries.map((_, value) => 12 + value.length).sum
@@ -125,6 +158,6 @@ object TableBTree:
             Leaf(entries.result(), Option.when(rawNext >= 0)(PageId(rawNext)))
           )
     catch
-      case error: StorageError                  => Left(error)
+      case error: StorageError => Left(error)
       case _: java.nio.BufferUnderflowException =>
         Left(StorageError("truncated B-tree page"))

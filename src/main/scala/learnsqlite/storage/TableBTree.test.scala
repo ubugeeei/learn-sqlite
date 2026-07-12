@@ -46,3 +46,47 @@ class TableBTreeSuite extends munit.FunSuite:
       Vector[Byte](1, 2, 3)
     )
     pager.close()
+
+  test("open independent trees by stable root page"):
+    val pager = Pager
+      .open(Files.createTempDirectory("roots").resolve("trees.db"), 512)
+      .toOption
+      .get
+    val (firstRoot, first) = TableBTree.create(pager).toOption.get
+    val (secondRoot, second) = TableBTree.create(pager).toOption.get
+    assertNotEquals(firstRoot, secondRoot)
+    assert(first.insert(1, Array[Byte](10)).isRight)
+    assert(second.insert(1, Array[Byte](20)).isRight)
+    assertEquals(
+      TableBTree
+        .at(pager, firstRoot)
+        .flatMap(_.get(1))
+        .toOption
+        .flatten
+        .get
+        .toVector,
+      Vector[Byte](10)
+    )
+    assertEquals(
+      TableBTree
+        .at(pager, secondRoot)
+        .flatMap(_.get(1))
+        .toOption
+        .flatten
+        .get
+        .toVector,
+      Vector[Byte](20)
+    )
+    pager.close()
+
+  test("replace keeps the root usable and removes old keys"):
+    val pager = Pager
+      .open(Files.createTempDirectory("replace").resolve("tree.db"), 512)
+      .toOption
+      .get
+    val tree = TableBTree.open(pager).toOption.get
+    assert(tree.insert(1, Array[Byte](1)).isRight)
+    assert(tree.insert(2, Array[Byte](2)).isRight)
+    assert(tree.replace(Vector(3L -> Array[Byte](3))).isRight)
+    assertEquals(tree.scan.toOption.get.map(_._1), Vector(3L))
+    pager.close()
