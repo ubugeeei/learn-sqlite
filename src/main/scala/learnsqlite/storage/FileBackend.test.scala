@@ -159,6 +159,19 @@ class FileBackendSuite extends munit.FunSuite:
         ))
       )
 
+  test("large TEXT records survive overflow pages and reopen"):
+    val path = temporaryDatabase("durable-overflow")
+    val largeText = Vector.tabulate(6_000)(index => ('a' + index % 26).toChar).mkString
+    withDatabase(path): database =>
+      assert(database.execute("CREATE TABLE documents (id INTEGER PRIMARY KEY, body TEXT)").isRight)
+      assert(database.execute(s"INSERT INTO documents VALUES (1, '$largeText')").isRight)
+
+    withDatabase(path): database =>
+      assertEquals(
+        database.execute("SELECT body FROM documents WHERE id = 1"),
+        Right(Result.Query(Vector("body"), Vector(Vector(Value.Text(largeText)))))
+      )
+
   private def temporaryDatabase(prefix: String): Path =
     Files.createTempDirectory(prefix).resolve("app.db")
 

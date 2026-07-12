@@ -121,12 +121,23 @@ class TableBTreeSuite extends munit.FunSuite:
       assertEquals(reopened.get(1_234L).toOption.flatten.map(_.toVector), Some(payload.toVector))
       reopenedPager.close()
 
-  test("reject a payload that needs overflow pages before mutating the tree"):
-    val pager =
-      Pager.open(Files.createTempDirectory("large-payload").resolve("tree.db"), 512).toOption.get
+  private val overflowPayloadSizes = Vector(0, 63, 64, 65, 503, 504, 1_200, 4_096)
+
+  test("store local and multi-page overflow payload boundaries"):
+    val path = Files.createTempDirectory("large-payload").resolve("tree.db")
+    val pager = Pager.open(path, 512).toOption.get
     val tree = TableBTree.open(pager).toOption.get
-    val pagesBefore = pager.pageCount
-    assert(tree.insert(1, Array.fill[Byte](512)(1)).left.toOption.get.message.contains("overflow"))
-    assertEquals(pager.pageCount, pagesBefore)
-    assertEquals(tree.scan, Right(Vector.empty))
+    val expected = overflowPayloadSizes.zipWithIndex.map: (size, index) =>
+      val payload = Array.tabulate[Byte](size)(offset => ((offset + index) % 251).toByte)
+      assert(tree.insert(index + 1, payload).isRight)
+      (index.toLong + 1) -> payload.toVector
+    assert(pager.pageCount > overflowPayloadSizes.size)
+    assertEquals(tree.scan.toOption.get.map((key, bytes) => key -> bytes.toVector), expected)
+    pager.force()
     pager.close()
+
+    val reopenedPager = Pager.open(path, 512).toOption.get
+    val reopened = TableBTree.open(reopenedPager).toOption.get
+    expected.foreach: (key, payload) =>
+      assertEquals(reopened.get(key).toOption.flatten.map(_.toVector), Some(payload))
+    reopenedPager.close()
