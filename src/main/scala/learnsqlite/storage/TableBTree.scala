@@ -13,10 +13,16 @@ import java.nio.ByteBuffer
  */
 final class TableBTree private (pager: Pager, root: PageId):
   import TableBTree.*
+  private val overflowPages = OverflowPages(pager)
 
   /** Finds one payload by descending interior separators. */
   def get(key: Long): Either[StorageError, Option[Array[Byte]]] =
-    find(root, key).map(_.flatMap(_.entries.find(_._1 == key).map(_._2.clone())))
+    find(root, key).flatMap:
+      case None => Right(None)
+      case Some(leaf) =>
+        leaf.entries.find(_.key == key) match
+          case None       => Right(None)
+          case Some(cell) => overflowPages.load(cell.payload).map(Some(_))
 
   /** Scans all leaf cells in ascending key order. */
   def scan: Either[StorageError, Vector[(Long, Array[Byte])]] =
@@ -27,19 +33,21 @@ final class TableBTree private (pager: Pager, root: PageId):
       ): Either[StorageError, Vector[(Long, Array[Byte])]] =
         read(id).flatMap:
           case leaf: Leaf =>
-            val appended = rows ++ leaf.entries.map((key, bytes) => key -> bytes.clone())
-            leaf.next.fold(Right(appended))(loop(_, appended))
+            materialize(leaf.entries).flatMap: entries =>
+              val appended = rows ++ entries
+              leaf.next.fold(Right(appended))(loop(_, appended))
           case _: Interior => Left(StorageError("leaf chain points to an interior page"))
       loop(first, Vector.empty)
 
   /** Inserts a unique key and propagates any split to the stable root. */
   def insert(key: Long, value: Array[Byte]): Either[StorageError, Unit] =
-    if LeafHeaderBytes + 12 + value.length > pager.pageSize then
-      Left(StorageError("payload is too large for a leaf page; overflow pages are not implemented"))
-    else
-      insertInto(root, key, value.clone()).flatMap:
-        case None        => Right(())
-        case Some(split) => growRoot(split)
+    get(key).flatMap:
+      case Some(_) => Left(StorageError(s"duplicate key: $key"))
+      case None =>
+        overflowPages.store(value).flatMap: payload =>
+          insertInto(root, Cell(key, payload)).flatMap:
+            case None        => Right(())
+            case Some(split) => growRoot(split)
 
   /**
    * Replaces all entries while preserving the root page id.
@@ -62,42 +70,37 @@ final class TableBTree private (pager: Pager, root: PageId):
 
   private def insertInto(
     id: PageId,
-    key: Long,
-    value: Array[Byte]
+    cell: Cell
   ): Either[StorageError, Option[Split]] =
     read(id).flatMap:
-      case leaf: Leaf         => insertLeaf(id, leaf, key, value)
-      case interior: Interior => insertInterior(id, interior, key, value)
+      case leaf: Leaf         => insertLeaf(id, leaf, cell)
+      case interior: Interior => insertInterior(id, interior, cell)
 
   private def insertLeaf(
     id: PageId,
     leaf: Leaf,
-    key: Long,
-    value: Array[Byte]
+    cell: Cell
   ): Either[StorageError, Option[Split]] =
-    if leaf.entries.exists(_._1 == key) then Left(StorageError(s"duplicate key: $key"))
+    val entries = (leaf.entries :+ cell).sortBy(_.key)
+    val updated = leaf.copy(entries = entries)
+    if encodedSize(updated) <= pager.pageSize then write(id, updated).map(_ => None)
     else
-      val entries = (leaf.entries :+ (key -> value)).sortBy(_._1)
-      val updated = leaf.copy(entries = entries)
-      if encodedSize(updated) <= pager.pageSize then write(id, updated).map(_ => None)
-      else
-        val middle = entries.size / 2
-        val leftEntries = entries.take(middle)
-        val rightEntries = entries.drop(middle)
-        for
-          rightId <- pager.allocate()
-          _ <- write(id, Leaf(leftEntries, Some(rightId)))
-          _ <- write(rightId, Leaf(rightEntries, leaf.next))
-        yield Some(Split(rightEntries.head._1, rightId))
+      val middle = entries.size / 2
+      val leftEntries = entries.take(middle)
+      val rightEntries = entries.drop(middle)
+      for
+        rightId <- pager.allocate()
+        _ <- write(id, Leaf(leftEntries, Some(rightId)))
+        _ <- write(rightId, Leaf(rightEntries, leaf.next))
+      yield Some(Split(rightEntries.head.key, rightId))
 
   private def insertInterior(
     id: PageId,
     interior: Interior,
-    key: Long,
-    value: Array[Byte]
+    cell: Cell
   ): Either[StorageError, Option[Split]] =
-    val childIndex = interior.childIndex(key)
-    insertInto(interior.children(childIndex), key, value).flatMap:
+    val childIndex = interior.childIndex(cell.key)
+    insertInto(interior.children(childIndex), cell).flatMap:
       case None => Right(None)
       case Some(childSplit) =>
         val expanded = interior.insert(childIndex, childSplit)
@@ -132,10 +135,17 @@ final class TableBTree private (pager: Pager, root: PageId):
   private def write(id: PageId, node: Node): Either[StorageError, Unit] =
     encode(node, pager.pageSize).flatMap(pager.write(id, _))
 
+  private def materialize(cells: Vector[Cell]): Either[StorageError, Vector[(Long, Array[Byte])]] =
+    cells.foldLeft(Right(Vector.empty): Either[StorageError, Vector[(Long, Array[Byte])]]):
+      case (result, cell) =>
+        result.flatMap(entries =>
+          overflowPages.load(cell.payload).map(bytes => entries :+ (cell.key -> bytes))
+        )
+
 object TableBTree:
   sealed private trait Node
-  final private case class Leaf(entries: Vector[(Long, Array[Byte])], next: Option[PageId])
-      extends Node
+  final private case class Cell(key: Long, payload: PayloadRef)
+  final private case class Leaf(entries: Vector[Cell], next: Option[PageId]) extends Node
   final private case class Interior(keys: Vector[Long], children: Vector[PageId]) extends Node:
     require(children.size == keys.size + 1, "an interior node has one more child than keys")
 
@@ -173,7 +183,8 @@ object TableBTree:
     pager.read(root).flatMap(decode).map(_ => TableBTree(pager, root))
 
   private def encodedSize(node: Node): Int = node match
-    case Leaf(entries, _)  => LeafHeaderBytes + entries.map((_, value) => 12 + value.length).sum
+    case Leaf(entries, _) =>
+      LeafHeaderBytes + entries.map(cell => 20 + cell.payload.local.length).sum
     case Interior(keys, _) => InteriorHeaderBytes + keys.size * 12
 
   private def encode(node: Node, pageSize: Int): Either[StorageError, Array[Byte]] =
@@ -183,8 +194,13 @@ object TableBTree:
       node match
         case Leaf(entries, next) =>
           buffer.put(LeafKind).putInt(next.fold(-1)(_.value)).putInt(entries.size)
-          entries.foreach: (key, value) =>
-            buffer.putLong(key).putInt(value.length).put(value)
+          entries.foreach: cell =>
+            buffer
+              .putLong(cell.key)
+              .putInt(cell.payload.totalLength)
+              .putInt(cell.payload.local.length)
+              .putInt(cell.payload.overflow.fold(-1)(_.value))
+              .put(cell.payload.local)
         case Interior(keys, children) =>
           buffer.put(InteriorKind).putInt(keys.size).putInt(children.head.value)
           keys.zip(children.tail).foreach: (key, child) =>
@@ -207,17 +223,23 @@ object TableBTree:
     val count = buffer.getInt()
     if count < 0 then Left(StorageError("negative leaf cell count"))
     else
-      val entries = Vector.newBuilder[(Long, Array[Byte])]
+      val entries = Vector.newBuilder[Cell]
       var previous: Option[Long] = None
       (0 until count).foreach: _ =>
         val key = buffer.getLong()
-        val length = buffer.getInt()
-        if length < 0 || length > buffer.remaining() then
-          throw StorageError("invalid leaf payload length")
+        val totalLength = buffer.getInt()
+        val localLength = buffer.getInt()
+        val rawOverflow = buffer.getInt()
+        if totalLength < 0 || localLength < 0 || localLength > totalLength || localLength > buffer.remaining()
+        then
+          throw StorageError("invalid leaf payload lengths")
         if previous.exists(_ >= key) then throw StorageError("leaf keys are not strictly ordered")
-        val value = Array.ofDim[Byte](length)
-        buffer.get(value)
-        entries += key -> value
+        val local = Array.ofDim[Byte](localLength)
+        buffer.get(local)
+        entries += Cell(
+          key,
+          PayloadRef(totalLength, local, Option.when(rawOverflow >= 0)(PageId(rawOverflow)))
+        )
         previous = Some(key)
       Right(Leaf(entries.result(), Option.when(rawNext >= 0)(PageId(rawNext))))
 
