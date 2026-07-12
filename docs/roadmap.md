@@ -73,14 +73,14 @@ Goal: reopen a SQL database, discover tables, and execute queries.
 
 Demo: create and populate a database, exit the process, reopen, query it, and persist deletion.
 
-## M6: recursive B-tree
+## M6: recursive B-tree — implemented foundation
 
 Goal: keep lookup logarithmic as the file grows.
 
-- Interior table pages.
-- Recursive descent and split propagation.
-- Root replacement without changing the public root id.
-- Overflow chains for payloads larger than local cell space.
+- Interior table pages, recursive descent, and split propagation.
+- Stable-root growth without changing the catalog page id.
+- Multi-level reopen tests under adversarial insertion orders.
+- Remaining: overflow chains, deletion rebalancing, and freelist reuse.
 
 ## M7: rollback transactions — implemented foundation
 

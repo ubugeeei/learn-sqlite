@@ -92,11 +92,11 @@ Reference: [B-tree Pages](https://www.sqlite.org/fileformat.html#b_tree_pages)
 | Leaf split and linked scan | reverse insertion/reopen test | ✅ |
 | Multiple stable roots | catalog and isolation test | ✅ |
 | Defensive payload copying | alias-mutation test | ✅ |
-| Interior nodes | — | ⬜ |
-| Recursive split propagation | — | ⬜ |
+| Interior nodes | `TableBTree.Interior`, 1,500-key tests | ✅ |
+| Recursive split propagation | leaf/interior/root split protocol | ✅ |
 | Cell deletion/rebalancing | full-tree rewrite only | ⬜ |
 | Index B-tree | — | ⬜ |
-| Logarithmic lookup | linked-leaf scan | ⬜ |
+| Logarithmic lookup | recursive separator descent | ✅ |
 
 ## Transactions and recovery
 
@@ -186,4 +186,3 @@ The project may call itself comprehensive only after:
 6. the book has a runnable checkpoint and exercises for each subsystem.
 
 Until then, README and release notes must state the narrower achieved milestone.
-
