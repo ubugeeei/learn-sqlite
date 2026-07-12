@@ -62,6 +62,7 @@ Reference: [Datatypes In SQLite](https://www.sqlite.org/datatype3.html)
 | Declared-type and storage affinity | `Affinity.scala`, schema boundary, reopen tests | ✅ |
 | Comparison/expression affinity | — | ⬜ |
 | Collations | binary text comparison only | 🟡 |
+| Single-column PRIMARY KEY uniqueness | batch/existing/update/reopen tests | ✅ safer non-NULL subset |
 | `INTEGER PRIMARY KEY` rowid alias | parsed but not honored | ⬜ |
 | UNIQUE, CHECK, DEFAULT, FOREIGN KEY | — | ⬜ |
 | Date/time and JSON functions | — | ⬜ |

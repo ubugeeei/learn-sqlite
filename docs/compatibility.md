@@ -13,6 +13,7 @@ reference when prose is ambiguous.
 |---|---|---|
 | SQL | `CREATE TABLE`, `INSERT`, `SELECT`, `UPDATE`, `DELETE` | joins, aggregates, DDL changes |
 | Types | five storage classes and storage-time affinity | comparison affinity and strict tables |
+| Constraints | `NOT NULL`, single-column `PRIMARY KEY` | UNIQUE, CHECK, foreign keys, conflict policies |
 | Storage | fixed-size pages, ordered table B-tree | byte-compatible SQLite pages |
 | Transactions | before-image rollback for mutating backend calls | SQL transactions, WAL, locking |
 | API | Scala API and REPL | JDBC driver |
