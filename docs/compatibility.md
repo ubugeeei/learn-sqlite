@@ -12,7 +12,7 @@ reference when prose is ambiguous.
 | Area | Initial milestone | Future work |
 |---|---|---|
 | SQL | `CREATE TABLE`, `INSERT`, `SELECT`, `UPDATE`, `DELETE` | joins, aggregates, DDL changes |
-| Types | integer, real, text, blob, null | affinities and strict tables |
+| Types | five storage classes and storage-time affinity | comparison affinity and strict tables |
 | Storage | fixed-size pages, ordered table B-tree | byte-compatible SQLite pages |
 | Transactions | before-image rollback for mutating backend calls | SQL transactions, WAL, locking |
 | API | Scala API and REPL | JDBC driver |

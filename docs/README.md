@@ -82,6 +82,7 @@ reserved values, invalid UTF-8, and defensive copying.
 
 - [8. Persistent catalog and file-backed SQL](08-persistent-catalog.md)
 - [9. Implementing UPDATE end to end](09-update.md)
+- [10. SQLite type affinity](10-type-affinity.md)
 - Database header and page-1 special handling
 - Free pages and the freelist trunk
 - Interior B-tree pages and recursive splitting

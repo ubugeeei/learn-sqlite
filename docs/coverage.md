@@ -59,7 +59,8 @@ Reference: [Datatypes In SQLite](https://www.sqlite.org/datatype3.html)
 | Arithmetic and comparisons | `Evaluator.scala` | 🟡 limited coercion |
 | `NOT NULL` | schema and persistent batch tests | ✅ |
 | Declared types retained | catalog records | ✅ |
-| SQLite type affinity | — | ⬜ |
+| Declared-type and storage affinity | `Affinity.scala`, schema boundary, reopen tests | ✅ |
+| Comparison/expression affinity | — | ⬜ |
 | Collations | binary text comparison only | 🟡 |
 | `INTEGER PRIMARY KEY` rowid alias | parsed but not honored | ⬜ |
 | UNIQUE, CHECK, DEFAULT, FOREIGN KEY | — | ⬜ |
