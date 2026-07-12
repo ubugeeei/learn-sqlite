@@ -67,10 +67,16 @@ class ParserSuite extends munit.FunSuite:
       Parser.parse("DELETE FROM users WHERE id >= 10 AND name != 'root'")
     assert(delete.toOption.get.asInstanceOf[Statement.Delete].where.nonEmpty)
 
-  test("report location for an unterminated literal"):
-    val error = Parser.parse("SELECT 'oops FROM t").left.toOption.get
-    assertEquals(error.position, SourcePosition(7, 1, 8))
+  private val invalidStatements = Vector(
+    ("unterminated text", "SELECT 'oops FROM t", "unterminated", SourcePosition(7, 1, 8)),
+    ("trailing token", "SELECT * FROM t nonsense", "end of input", SourcePosition(16, 1, 17)),
+    ("missing projection", "SELECT FROM users", "expected FROM", SourcePosition(12, 1, 13)),
+    ("missing table name", "DELETE FROM", "identifier", SourcePosition(11, 1, 12)),
+    ("unclosed columns", "CREATE TABLE t (id INTEGER", "')'", SourcePosition(26, 1, 27))
+  )
 
-  test("reject trailing tokens"):
-    val error = Parser.parse("SELECT * FROM t nonsense").left.toOption.get
-    assert(error.message.contains("end of input"))
+  invalidStatements.foreach: (scenario, sql, expectedMessage, expectedPosition) =>
+    test(s"reject $scenario with a positioned diagnostic"):
+      val error = Parser.parse(sql).left.toOption.get
+      assert(error.message.contains(expectedMessage), error.toString)
+      assertEquals(error.position, expectedPosition)

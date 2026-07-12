@@ -65,6 +65,19 @@ class RecordCodecSuite extends munit.FunSuite:
         .contains("reserved")
     )
 
+  private val malformedRecords = Vector(
+    "truncated header varint" -> Array(0x80.toByte),
+    "header larger than record" -> Array[Byte](10),
+    "header smaller than itself" -> Array[Byte](0),
+    "reserved serial type 10" -> Array[Byte](2, 10),
+    "reserved serial type 11" -> Array[Byte](2, 11),
+    "text payload is absent" -> Array[Byte](2, 15)
+  )
+
+  malformedRecords.foreach: (scenario, bytes) =>
+    test(s"reject malformed record: $scenario"):
+      assert(RecordCodec.decode(bytes).isLeft)
+
   private def normalize(values: Vector[Value]): Vector[Any] = values.map:
     case Value.Blob(bytes) => bytes.toVector
     case other             => other
